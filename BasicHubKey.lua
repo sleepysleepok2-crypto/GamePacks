@@ -23,7 +23,7 @@ local Config = {
     Secret          = "Code1234", -- This makes the script ONLY run from the key script. Even if they copy the original obfuscated script to bypass the key, they won't be able to!
     
     -- [3] Scripts & Links
-    MainScriptURL   = "https://raw.githubusercontent.com/sleepysleepok2-crypto/GamePacks/refs/heads/main/Farm.lua?token=GHSAT0AAAAAAD5KK5H7KP3U4OBKXFMA5FEA2QIXHJA", -- The raw URL of your main script
+    MainScriptURL   = "https://raw.githubusercontent.com/sleepysleepok2-crypto/GamePacks/refs/heads/main/Farm.lua", -- The raw URL of your main script
     
     -- [4] Social Media Settings (Set to true to show, false to hide)
     ShowDiscord     = false,
