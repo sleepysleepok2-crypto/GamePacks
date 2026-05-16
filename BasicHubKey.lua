@@ -4,37 +4,47 @@
     Project: Custom Script
     Author: OYB
     YouTube: https://www.youtube.com/channel/UCAlXXV1Hbvf7WbfXARuVtiQ
-    
+
     [ TERMS AND CONDITIONS ]
     - You ARE allowed to use and modify this script for your own games.
-    - You ARE NOT allowed to re-upload, redistribute, or claim 
+    - You ARE NOT allowed to re-upload, redistribute, or claim
       ownership of this script.
     - Removing or altering these credits is strictly prohibited.
-    
+
     Copyright (c) 2026 OYB. All rights reserved.
     ================================================================
 ]]
 local Config = {
     -- [1] PlatoBoost Settings
-    ServiceId       = 25252, -- Your PlatoBoost Service ID
-    PlatoSecret     = "fbf87ecf-7b6a-4825-af1f-ef465bf7894d", -- Your PlatoBoost Secret Key
+    ServiceId       = 25252,
+    PlatoSecret     = "fbf87ecf-7b6a-4825-af1f-ef465bf7894d",
 
     -- [2] Anti-Bypass / Global Secret Variable
-    Secret          = "Code1234", -- This makes the script ONLY run from the key script. Even if they copy the original obfuscated script to bypass the key, they won't be able to!
-    
-    -- [3] Scripts & Links
-    MainScriptURL   = "https://raw.githubusercontent.com/sleepysleepok2-crypto/GamePacks/refs/heads/main/Farm.lua", -- The raw URL of your main script
+    Secret          = "Code1234",
 
-    -- [4] File System
-    KeyFileName     = "FruitKeys.txt", -- The name of the file where the valid key will be saved for auto-login
+    -- [3] Scripts & Links
+    MainScriptURL   = "https://raw.githubusercontent.com/sleepysleepok2-crypto/GamePacks/refs/heads/main/Farm.lua",
+
+    -- [4] Social Media Settings (all false = hidden)
+    ShowDiscord     = false,
+    DiscordURL      = "",
+
+    ShowInstagram   = false,
+    InstagramURL    = "",
+
+    ShowYoutube     = false,
+    YoutubeURL      = "",
+
+    -- [5] File System
+    KeyFileName     = "FruitKeys.txt",
 
     -- [6] GUI Management
-    OldGuiName      = "anything", -- Name of the old GUI to destroy if it's already open
-    MainGuiName     = "anything", -- Name of the main script's GUI to check if it's already executing
+    OldGuiName      = "",
+    MainGuiName     = "",
 
     -- [7] Hub Information & UI Text
-    HubName         = "BasicHub", -- The main title shown at the top of the GUI
-    HubDescription  = "BasicHub farm" -- The text shown below the title
+    HubName         = "BasicHub",
+    HubDescription  = "BasicHub | Blox Fruits"
 }
 
 -------------------------------------------------------------------------------
@@ -47,11 +57,10 @@ local lEncode, lDecode, lDigest = a3, aw, Z;
 --! CORE FUNCTIONS (REQUESTS & VERIFICATION)
 -------------------------------------------------------------------------------
 
-local useNonce = true -- Hidden from Config to avoid user confusion, but active for security
+local useNonce = true
 
--- Safe request function for universal executor support
 local function safeRequest(options)
-    local req = request or http_request or syn_request or (http and http.request )
+    local req = request or http_request or syn_request or (http and http.request)
     if not req then return nil, "HTTP requests not supported" end
     local success, response = pcall(function() return req(options) end)
     if success and response then return response else return nil, "Connection Error" end
@@ -64,14 +73,13 @@ local fGetHwid = gethwid or function() return game:GetService("RbxAnalyticsServi
 local cachedLink, cachedTime = "", 0
 local host = "https://api.platoboost.com"
 
--- Check server connectivity
-local function checkConnectivity( )
+local function checkConnectivity()
     local response = safeRequest({Url = host .. "/public/connectivity", Method = "GET"})
     if not response or (response.StatusCode ~= 200 and response.StatusCode ~= 429) then
         host = "https://api.platoboost.net"
     end
 end
-checkConnectivity( )
+checkConnectivity()
 
 local function generateNonce()
     local str = ""
@@ -79,7 +87,6 @@ local function generateNonce()
     return str
 end
 
--- Get player's key link
 local function cacheLink()
     if cachedTime + (10*60) < fOsTime() then
         local response, err = safeRequest({
@@ -101,26 +108,25 @@ local function cacheLink()
     return true, cachedLink
 end
 
--- Verify key on input
 local function redeemKey(key)
     local nonce = generateNonce()
     local body = {identifier = lDigest(fGetHwid()), key = key}
     if useNonce then body.nonce = nonce end
-    
+
     local response, err = safeRequest({
         Url = host .. "/public/redeem/" .. fToString(Config.ServiceId),
         Method = "POST",
         Body = lEncode(body),
         Headers = {["Content-Type"] = "application/json"}
     })
-    
+
     if response and response.StatusCode == 200 then
         local decoded = lDecode(response.Body)
         if decoded.success and decoded.data.valid then
             if useNonce then
-                if decoded.data.hash == lDigest("true" .. "-" .. nonce .. "-" .. Config.PlatoSecret) then 
+                if decoded.data.hash == lDigest("true" .. "-" .. nonce .. "-" .. Config.PlatoSecret) then
                     if writefile then writefile(Config.KeyFileName, key) end
-                    return true, "Success" 
+                    return true, "Success"
                 end
                 return false, "Integrity Check Failed"
             end
@@ -139,17 +145,13 @@ end
 local function StartMainScript()
     local player = game:GetService("Players").LocalPlayer
     local pGui = player:WaitForChild("PlayerGui")
-    
-    -- Destroy old GUI if it exists
-    if pGui:FindFirstChild(Config.OldGuiName) then 
-        pGui[Config.OldGuiName]:Destroy() 
+
+    if Config.OldGuiName ~= "" and pGui:FindFirstChild(Config.OldGuiName) then
+        pGui[Config.OldGuiName]:Destroy()
         task.wait(0.1)
     end
-    
-    -- Set secret global variable to bypass main script protection
-    _G[Config.Secret] = true 
-    
-    -- Execute main script
+
+    _G[Config.Secret] = true
     loadstring(game:HttpGet(Config.MainScriptURL))()
 end
 
@@ -157,8 +159,10 @@ local function CreateGUI()
     local player = game:GetService("Players").LocalPlayer
     local coreGui = game:GetService("CoreGui")
     local targetParent = pcall(function() return coreGui end) and coreGui or player:WaitForChild("PlayerGui")
-    
-    if targetParent:FindFirstChild("BasicHub_KeySystem") then targetParent.BasicHub_KeySystem:Destroy() end
+
+    if targetParent:FindFirstChild("BasicHub_KeySystem") then
+        targetParent.BasicHub_KeySystem:Destroy()
+    end
 
     local ScreenGui = Instance.new("ScreenGui", targetParent)
     ScreenGui.Name = "BasicHub_KeySystem"
@@ -168,15 +172,14 @@ local function CreateGUI()
     MainFrame.Size = UDim2.new(0, 340, 0, 420)
     MainFrame.Position = UDim2.new(0.5, -170, 0.5, -210)
     MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-    MainFrame.Active = true;
+    MainFrame.Active = true
     MainFrame.Draggable = true
     Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 15)
-    
+
     local mainStroke = Instance.new("UIStroke", MainFrame)
-    mainStroke.Thickness = 2;
+    mainStroke.Thickness = 2
     mainStroke.Color = Color3.fromRGB(40, 40, 40)
 
-    -- Close Button
     local CloseBtn = Instance.new("TextButton", MainFrame)
     CloseBtn.Size = UDim2.new(0, 30, 0, 30)
     CloseBtn.Position = UDim2.new(1, -35, 0, 10)
@@ -193,7 +196,7 @@ local function CreateGUI()
     Title.Text = Config.HubName
     Title.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
     Title.TextColor3 = Color3.fromRGB(0, 170, 255)
-    Title.Font = Enum.Font.GothamBold;
+    Title.Font = Enum.Font.GothamBold
     Title.TextSize = 16
     Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 15)
 
@@ -203,11 +206,10 @@ local function CreateGUI()
     PromoText.BackgroundTransparency = 1
     PromoText.Text = Config.HubDescription
     PromoText.TextColor3 = Color3.fromRGB(0, 170, 255)
-    PromoText.Font = Enum.Font.GothamBold;
+    PromoText.Font = Enum.Font.GothamBold
     PromoText.TextSize = 14
     PromoText.TextWrapped = true
 
-    -- Rainbow Stroke Function
     local function AddRainbowStroke(parent)
         local stroke = Instance.new("UIStroke", parent)
         stroke.Thickness = 2
@@ -220,18 +222,73 @@ local function CreateGUI()
         end)
     end
 
-    -- Dynamic Positioning for elements
     local currentYOffset = 105
 
-    -- Key Input Box
+    if Config.ShowDiscord then
+        local DiscordBtn = Instance.new("TextButton", MainFrame)
+        DiscordBtn.Size = UDim2.new(0.85, 0, 0, 35)
+        DiscordBtn.Position = UDim2.new(0.075, 0, 0, currentYOffset)
+        DiscordBtn.Text = "      JOIN DISCORD"
+        DiscordBtn.Font = "GothamBold"
+        DiscordBtn.TextSize = 14
+        DiscordBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+        DiscordBtn.TextColor3 = Color3.new(1, 1, 1)
+        Instance.new("UICorner", DiscordBtn)
+        AddRainbowStroke(DiscordBtn)
+        DiscordBtn.MouseButton1Click:Connect(function()
+            fSetClipboard(Config.DiscordURL)
+            local s = MainFrame:FindFirstChild("StatusLabel")
+            if s then s.Text = "Discord Link Copied!"; s.TextColor3 = Color3.fromRGB(88, 101, 242) end
+        end)
+        currentYOffset = currentYOffset + 45
+    end
+
+    if Config.ShowInstagram then
+        local InstaBtn = Instance.new("TextButton", MainFrame)
+        InstaBtn.Size = UDim2.new(0.85, 0, 0, 35)
+        InstaBtn.Position = UDim2.new(0.075, 0, 0, currentYOffset)
+        InstaBtn.Text = "      FOLLOW INSTAGRAM"
+        InstaBtn.Font = "GothamBold"
+        InstaBtn.TextSize = 14
+        InstaBtn.BackgroundColor3 = Color3.fromRGB(225, 48, 108)
+        InstaBtn.TextColor3 = Color3.new(1, 1, 1)
+        Instance.new("UICorner", InstaBtn)
+        AddRainbowStroke(InstaBtn)
+        InstaBtn.MouseButton1Click:Connect(function()
+            fSetClipboard(Config.InstagramURL)
+            local s = MainFrame:FindFirstChild("StatusLabel")
+            if s then s.Text = "Instagram Link Copied!"; s.TextColor3 = Color3.fromRGB(225, 48, 108) end
+        end)
+        currentYOffset = currentYOffset + 45
+    end
+
+    if Config.ShowYoutube then
+        local YTBtn = Instance.new("TextButton", MainFrame)
+        YTBtn.Size = UDim2.new(0.85, 0, 0, 35)
+        YTBtn.Position = UDim2.new(0.075, 0, 0, currentYOffset)
+        YTBtn.Text = "      SUBSCRIBE YOUTUBE"
+        YTBtn.Font = "GothamBold"
+        YTBtn.TextSize = 14
+        YTBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        YTBtn.TextColor3 = Color3.new(1, 1, 1)
+        Instance.new("UICorner", YTBtn)
+        AddRainbowStroke(YTBtn)
+        YTBtn.MouseButton1Click:Connect(function()
+            fSetClipboard(Config.YoutubeURL)
+            local s = MainFrame:FindFirstChild("StatusLabel")
+            if s then s.Text = "YouTube Link Copied!"; s.TextColor3 = Color3.fromRGB(255, 0, 0) end
+        end)
+        currentYOffset = currentYOffset + 45
+    end
+
     local KeyInput = Instance.new("TextBox", MainFrame)
     KeyInput.Size = UDim2.new(0.85, 0, 0, 40)
     KeyInput.Position = UDim2.new(0.075, 0, 0, currentYOffset + 15)
     KeyInput.PlaceholderText = "Enter Key..."
     KeyInput.Text = ""
-    KeyInput.Font = Enum.Font.GothamSemibold;
+    KeyInput.Font = Enum.Font.GothamSemibold
     KeyInput.TextSize = 14
-    KeyInput.BackgroundColor3 = Color3.fromRGB(25, 25, 25);
+    KeyInput.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
     KeyInput.TextColor3 = Color3.new(1, 1, 1)
     Instance.new("UICorner", KeyInput)
 
@@ -239,9 +296,9 @@ local function CreateGUI()
     VerifyBtn.Size = UDim2.new(0.4, 0, 0, 40)
     VerifyBtn.Position = UDim2.new(0.075, 0, 0, currentYOffset + 65)
     VerifyBtn.Text = "VERIFY"
-    VerifyBtn.Font = "GothamBold";
+    VerifyBtn.Font = "GothamBold"
     VerifyBtn.TextSize = 14
-    VerifyBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255);
+    VerifyBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
     VerifyBtn.TextColor3 = Color3.new(1, 1, 1)
     Instance.new("UICorner", VerifyBtn)
 
@@ -249,9 +306,9 @@ local function CreateGUI()
     GetKeyBtn.Size = UDim2.new(0.4, 0, 0, 40)
     GetKeyBtn.Position = UDim2.new(0.525, 0, 0, currentYOffset + 65)
     GetKeyBtn.Text = "GET KEY"
-    GetKeyBtn.Font = "GothamBold";
+    GetKeyBtn.Font = "GothamBold"
     GetKeyBtn.TextSize = 14
-    GetKeyBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35);
+    GetKeyBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
     GetKeyBtn.TextColor3 = Color3.new(1, 1, 1)
     Instance.new("UICorner", GetKeyBtn)
 
@@ -262,13 +319,11 @@ local function CreateGUI()
     Status.BackgroundTransparency = 1
     Status.Text = "Waiting for input..."
     Status.TextColor3 = Color3.fromRGB(150, 150, 150)
-    Status.Font = Enum.Font.Gotham;
+    Status.Font = Enum.Font.Gotham
     Status.TextSize = 12
-    
-    -- Dynamically adjust main frame height based on active elements
+
     MainFrame.Size = UDim2.new(0, 340, 0, currentYOffset + 160)
 
-    -- Logic
     VerifyBtn.MouseButton1Click:Connect(function()
         local key = KeyInput.Text
         if key == "" then Status.Text = "Enter a key!"; return end
@@ -298,7 +353,6 @@ local function CreateGUI()
         end
     end)
 
-    -- Auto Check Saved Key
     if isfile and isfile(Config.KeyFileName) then
         local savedKey = readfile(Config.KeyFileName)
         if savedKey ~= "" then
@@ -320,14 +374,12 @@ local function CreateGUI()
     end
 end
 
--- Check if main script GUI is already open
 local player = game:GetService("Players").LocalPlayer
 local pGui = player:WaitForChild("PlayerGui")
 
-if pGui:FindFirstChild(Config.MainGuiName) then
-    StartMainScript() -- Run if main script is already active
+if Config.MainGuiName ~= "" and pGui:FindFirstChild(Config.MainGuiName) then
+    StartMainScript()
     return
 end
 
--- Initialize Key System GUI
 CreateGUI()
