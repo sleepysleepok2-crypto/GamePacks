@@ -24,18 +24,8 @@ local Config = {
     
     -- [3] Scripts & Links
     MainScriptURL   = "https://raw.githubusercontent.com/sleepysleepok2-crypto/GamePacks/refs/heads/main/Farm.lua", -- The raw URL of your main script
-    
-    -- [4] Social Media Settings (Set to true to show, false to hide)
-    ShowDiscord     = false,
-    DiscordURL      = "",
-    
-    ShowInstagram   = false,
-    InstagramURL    = "",
-    
-    ShowYoutube     = false,
-    YoutubeURL      = "",
 
-    -- [5] File System
+    -- [4] File System
     KeyFileName     = "FruitKeys.txt", -- The name of the file where the valid key will be saved for auto-login
 
     -- [6] GUI Management
