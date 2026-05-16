@@ -38,106 +38,12 @@ local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
 local TeleportService  = game:GetService("TeleportService")
 local ReplicatedStorage= game:GetService("ReplicatedStorage")
-local UserInputService = game:GetService("UserInputService")
 local LocalPlayer      = Players.LocalPlayer
-
--------------------------------------------------------------------------------
--- EXECUTOR COMPATIBILITY LAYER
--- Supports: Synapse X, KRNL, Fluxus, Delta, Xeno, Seliware,
---           Potassium, Comet, Arceus X, Hydrogen, Solara,
---           Wave, Scriptware, Electron, Elysian & more
--------------------------------------------------------------------------------
-
--- Detect executor name (shown in About tab)
-local ExecutorName = "Unknown"
-pcall(function()
-    if syn                                  then ExecutorName = "Synapse X"
-    elseif KRNL_LOADED                      then ExecutorName = "KRNL"
-    elseif typeof(fluxus) == "table"        then ExecutorName = "Fluxus"
-    elseif typeof(getexecutorname) == "function" then ExecutorName = getexecutorname()
-    elseif typeof(identifyexecutor)  == "function" then ExecutorName = identifyexecutor()
-    elseif typeof(whatexecutor) == "function" then ExecutorName = whatexecutor()
-    end
-end)
-
--- HTTP Request (used by Rayfield / key system internally)
-local HttpRequest = (function()
-    if syn and typeof(syn.request)         == "function" then return syn.request         end
-    if typeof(request)                     == "function" then return request               end
-    if typeof(http_request)                == "function" then return http_request          end
-    if http and typeof(http.request)       == "function" then return http.request          end
-    if fluxus and typeof(fluxus.request)   == "function" then return fluxus.request        end
-    return function() warn("[BasicHub] HTTP requests not supported on this executor.") end
-end)()
-
--- Clipboard
-local SetClipboard = (function()
-    if typeof(setclipboard)               == "function" then return setclipboard            end
-    if typeof(toclipboard)                == "function" then return toclipboard              end
-    if syn and typeof(syn.write_clipboard)== "function" then return syn.write_clipboard      end
-    if Clipboard and typeof(Clipboard.set)== "function" then return Clipboard.set            end
-    return function() warn("[BasicHub] Clipboard not supported on this executor.")         end
-end)()
-
--- File System: write
-local WriteFile = (function()
-    if typeof(writefile) == "function" then return writefile end
-    return function() warn("[BasicHub] writefile not supported.") end
-end)()
-
--- File System: read
-local ReadFile = (function()
-    if typeof(readfile) == "function" then return readfile end
-    return function() return "" end
-end)()
-
--- File System: check
-local IsFile = (function()
-    if typeof(isfile) == "function" then return isfile end
-    return function() return false end
-end)()
-
--- File System: make folder
-local MakeFolder = (function()
-    if typeof(makefolder) == "function" then return makefolder end
-    return function() end
-end)()
-
--- Hardware ID
-local GetHWID = (function()
-    if typeof(gethwid)                    == "function" then return gethwid                  end
-    if syn and typeof(syn.get_hwid)       == "function" then return syn.get_hwid             end
-    return function()
-        return tostring(game:GetService("RbxAnalyticsService"):GetClientId())
-    end
-end)()
-
--- Safe HttpGet wrapper (some mobile executors differ)
-local function SafeHttpGet(url)
-    local ok, result = pcall(function()
-        return game:HttpGet(url, true)
-    end)
-    if not ok or not result then
-        ok, result = pcall(function()
-            local res = HttpRequest({ Url = url, Method = "GET" })
-            return res and res.Body
-        end)
-    end
-    return result
-end
-
--- Safe loadstring wrapper
-local SafeLoadstring = (function()
-    if typeof(getgenv) == "function" and getgenv().loadstring then
-        return getgenv().loadstring
-    end
-    return loadstring
-end)()
 
 -------------------------------------------------------------------------------
 -- LOAD RAYFIELD
 -------------------------------------------------------------------------------
-local Rayfield = SafeLoadstring(SafeHttpGet("https://sirius.menu/rayfield"))()
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 -------------------------------------------------------------------------------
 -- STATE (tracks all toggle values and connections)
@@ -295,7 +201,7 @@ local function toggleInfiniteJump(enabled)
     end
     if not enabled then return end
 
-    infiniteJumpConn = UserInputService.JumpRequest:Connect(function()
+    infiniteJumpConn = game:GetService("UserInputService").JumpRequest:Connect(function()
         local hum = GetHumanoid()
         if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
     end)
@@ -739,7 +645,7 @@ MiscTab:CreateToggle({
 MiscTab:CreateButton({
     Name     = "Copy Server ID",
     Callback = function()
-        SetClipboard(game.JobId)
+        setclipboard(game.JobId)
         Notify("📋 Copied", "Server ID copied to clipboard.", 2)
     end,
 })
@@ -747,7 +653,7 @@ MiscTab:CreateButton({
 MiscTab:CreateButton({
     Name     = "Copy Player ID",
     Callback = function()
-        SetClipboard(tostring(LocalPlayer.UserId))
+        setclipboard(tostring(LocalPlayer.UserId))
         Notify("📋 Copied", "Your Player ID copied to clipboard.", 2)
     end,
 })
@@ -756,7 +662,7 @@ MiscTab:CreateSection("About")
 
 MiscTab:CreateParagraph({
     Title   = "BasicHub | Blox Fruits",
-    Content = "UI Library  : Rayfield\nKey System  : Platoboost\nDeveloper   : BasicHub Team\nExecutor    : " .. ExecutorName,
+    Content = "UI Library  : Rayfield\nKey System  : Platoboost\nDeveloper   : BasicHub Team",
 })
 
 -------------------------------------------------------------------------------
