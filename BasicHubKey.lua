@@ -152,7 +152,20 @@ local function StartMainScript()
     end
 
     _G[Config.Secret] = true
-    loadstring(game:HttpGet(Config.MainScriptURL))()
+    local ok, src = pcall(function() return game:HttpGet(Config.MainScriptURL) end)
+    if not ok or not src or #src < 10 then
+        warn("[BasicHub] Failed to download Farm.lua: " .. tostring(src))
+        return
+    end
+    local fn, err = loadstring(src)
+    if not fn then
+        warn("[BasicHub] Farm.lua syntax error: " .. tostring(err))
+        return
+    end
+    local runOk, runErr = pcall(fn)
+    if not runOk then
+        warn("[BasicHub] Farm.lua runtime error: " .. tostring(runErr))
+    end
 end
 
 local function CreateGUI()
