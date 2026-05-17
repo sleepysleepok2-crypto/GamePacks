@@ -204,7 +204,11 @@ task.spawn(function()
                         local f = obj.Parent
                         if f and f:IsA("Frame") then
                             f.ClipsDescendants = true
-                            if not table.find(inputFrames, f) then
+                            local alreadyTracked = false
+                            for _, tracked in ipairs(inputFrames) do
+                                if tracked == f then alreadyTracked = true; break end
+                            end
+                            if not alreadyTracked then
                                 table.insert(inputFrames, f)
                                 local captured = f
                                 task.delay(0.15, function()
