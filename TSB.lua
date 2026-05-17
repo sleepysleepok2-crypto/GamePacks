@@ -154,49 +154,51 @@ task.spawn(function()
             end
         end)
 
-        -- Simplify sliders by COLOUR detection — works regardless of element names.
-        -- Blue UIStroke = slider border → make thin grey
-        -- Blue-filled Frame = progress fill → make darker, reduce radius, remove gradient
-        local function simplifySliders(root)
+        -- Slider fix:
+        -- 1. ClipsDescendants = true on rounded containers → fill stays inside corners
+        -- 2. Detect blue UIStrokes → make thin grey
+        -- 3. Detect blue fill frames → darken + strip gradient
+        local function fixSliders(root)
             for _, obj in pairs(root:GetDescendants()) do
                 pcall(function()
-                    -- ── Blue border strokes ──────────────────────────────────────
-                    if obj:IsA("UIStroke") then
-                        local c = obj.Color
-                        if c.B > 0.35 and c.B > c.R then   -- blue dominant
-                            obj.Thickness = 1
-                            obj.Color     = Color3.fromRGB(55, 55, 65)
-                            -- Flatten the parent frame's corner radius too
-                            if obj.Parent and obj.Parent:IsA("Frame") then
-                                local corner = obj.Parent:FindFirstChildOfClass("UICorner")
-                                if corner then corner.CornerRadius = UDim.new(0, 4) end
-                                -- Remove gradient on parent
-                                for _, c2 in pairs(obj.Parent:GetChildren()) do
-                                    if c2:IsA("UIGradient") then c2:Destroy() end
-                                end
+                    -- ── Rounded containers: clip their children ──────────────────
+                    if obj:IsA("Frame") and obj:FindFirstChildOfClass("UICorner") then
+                        obj.ClipsDescendants = true
+                        -- If it also has UIStroke → it's a slider track border
+                        local stroke = obj:FindFirstChildOfClass("UIStroke")
+                        if stroke then
+                            local c = stroke.Color
+                            if c.B > 0.3 and c.B > c.R then   -- blue border
+                                stroke.Thickness = 1
+                                stroke.Color = Color3.fromRGB(60, 60, 68)
+                                local corner = obj:FindFirstChildOfClass("UICorner")
+                                if corner then corner.CornerRadius = UDim.new(0, 5) end
+                            end
+                            for _, g in pairs(obj:GetChildren()) do
+                                if g:IsA("UIGradient") then g:Destroy() end
                             end
                         end
                     end
-                    -- ── Blue fill frames (the coloured progress bar) ─────────────
+                    -- ── Blue fill frames (progress bar inside slider) ────────────
                     if obj:IsA("Frame") and obj.BackgroundTransparency < 0.5 then
                         local c = obj.BackgroundColor3
-                        if c.B > 0.35 and c.B > c.R then   -- blue dominant
-                            obj.BackgroundColor3 = Color3.fromRGB(40, 80, 160)
-                            local corner = obj:FindFirstChildOfClass("UICorner")
-                            if corner then corner.CornerRadius = UDim.new(0, 3) end
-                            for _, child in pairs(obj:GetChildren()) do
-                                if child:IsA("UIGradient") then child:Destroy() end
+                        if c.B > 0.3 and c.B > c.R then
+                            obj.BackgroundColor3 = Color3.fromRGB(38, 78, 160)
+                            for _, g in pairs(obj:GetChildren()) do
+                                if g:IsA("UIGradient") then g:Destroy() end
                             end
+                            local corner = obj:FindFirstChildOfClass("UICorner")
+                            if corner then corner.CornerRadius = UDim.new(0, 4) end
                         end
                     end
                 end)
             end
         end
         task.wait(1.5)
-        simplifySliders(rfGui)
+        fixSliders(rfGui)
         rfGui.DescendantAdded:Connect(function()
             task.wait(0.1)
-            pcall(simplifySliders, rfGui)
+            pcall(fixSliders, rfGui)
         end)
     end)
 end)
@@ -990,39 +992,55 @@ local avatarUserId    = ""
 local keepAfterReset  = false
 local savedAvatarUid  = nil   -- store UID so we can re-apply on respawn (no server call)
 
--- Visual-only avatar using CreateHumanoidModelFromDescription
--- This is the ONLY reliable client-side method — builds a full model
--- with correct SurfaceAppearance, WrapDeformers, layered clothing, etc.
--- then copies every visual element directly to the local character.
+-- Avatar changer using ApplyDescriptionClientServer (executor API)
+-- Applies the complete avatar: body shape, colors, accessories, clothing, face.
+-- Falls back to CreateHumanoidModelFromDescription if executor doesn't support it.
 local avatarColorConn = nil
 
 local function applyVisualAvatar(uid)
     local char = LocalPlayer.Character
     if not char then return false, "No character loaded" end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return false, "No Humanoid" end
 
-    -- 1. Get HumanoidDescription of target
+    -- Stop any previous color lock
+    if avatarColorConn then pcall(function() avatarColorConn:Disconnect() end); avatarColorConn = nil end
+
+    -- 1. Get HumanoidDescription of target player
     local ok, desc = pcall(function()
         return Players:GetHumanoidDescriptionFromUserId(uid)
     end)
-    if not ok or not desc then
-        return false, "Bad ID: " .. tostring(desc)
-    end
+    if not ok or not desc then return false, "Bad ID: " .. tostring(desc) end
 
-    -- 2. Build complete avatar model client-side (NOT server restricted)
-    --    This handles skin color, SurfaceAppearance, layered clothes, etc.
-    local model
-    pcall(function()
-        model = Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15)
+    -- 2. PRIMARY: ApplyDescriptionClientServer  (executor-level API)
+    --    Handles 100% of the avatar in one call — body shape, colors,
+    --    ALL accessories, layered clothing, face, etc.
+    local primaryOk = pcall(function()
+        humanoid:ApplyDescriptionClientServer(desc)
     end)
-    if not model then
-        pcall(function()
-            model = Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R6)
-        end)
-    end
-    if not model then return false, "CreateHumanoidModelFromDescription failed" end
 
-    -- 3. FULLY wipe own character — accessories, clothing, BodyColors,
-    --    SurfaceAppearance, WrapDeformer (everything visual)
+    if primaryOk then
+        -- Restart Animate script so animations work with the new rig
+        pcall(function()
+            local anim = char:FindFirstChild("Animate")
+            if anim then
+                local clone = anim:Clone()
+                anim:Destroy()
+                clone.Parent = char
+            end
+        end)
+        return true
+    end
+
+    -- 3. FALLBACK: CreateHumanoidModelFromDescription + manual copy
+    local model
+    pcall(function() model = Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15) end)
+    if not model then
+        pcall(function() model = Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R6) end)
+    end
+    if not model then return false, "Both methods failed" end
+
+    -- Wipe own character's visual decorations
     for _, v in pairs(char:GetChildren()) do
         if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants")
            or v:IsA("ShirtGraphic") or v:IsA("BodyColors") then
@@ -1035,94 +1053,66 @@ local function applyVisualAvatar(uid)
         end
     end
 
-    -- 4. Copy body part visuals from model:
-    --    Color + SurfaceAppearance + WrapDeformer + SpecialMesh texture
+    -- Copy body part visuals (Color, SurfaceAppearance, WrapDeformer, SpecialMesh)
     local colorLock = {}
-    for _, modelPart in pairs(model:GetDescendants()) do
-        if modelPart:IsA("BasePart") then
+    for _, mp in pairs(model:GetDescendants()) do
+        if mp:IsA("BasePart") then
             pcall(function()
-                local charPart = char:FindFirstChild(modelPart.Name)
-                if charPart and charPart:IsA("BasePart") then
-                    -- Skin color
-                    charPart.Color = modelPart.Color
-                    colorLock[charPart] = modelPart.Color
-                    -- Visual children: SurfaceAppearance, WrapDeformer
-                    for _, child in pairs(modelPart:GetChildren()) do
-                        if child:IsA("SurfaceAppearance") or child:IsA("WrapDeformer") then
-                            child:Clone().Parent = charPart
-                        end
+                local cp = char:FindFirstChild(mp.Name)
+                if cp and cp:IsA("BasePart") then
+                    cp.Color = mp.Color; colorLock[cp] = mp.Color
+                    for _, c in pairs(mp:GetChildren()) do
+                        if c:IsA("SurfaceAppearance") or c:IsA("WrapDeformer") then c:Clone().Parent = cp end
                     end
-                    -- SpecialMesh texture (older-style parts)
-                    local mMesh = modelPart:FindFirstChildOfClass("SpecialMesh")
-                    if mMesh then
-                        local cMesh = charPart:FindFirstChildOfClass("SpecialMesh")
-                        if cMesh then
-                            cMesh.TextureId = mMesh.TextureId
-                            cMesh.MeshId    = mMesh.MeshId
-                        else
-                            mMesh:Clone().Parent = charPart
-                        end
+                    local mm = mp:FindFirstChildOfClass("SpecialMesh")
+                    if mm then
+                        local cm = cp:FindFirstChildOfClass("SpecialMesh")
+                        if cm then cm.TextureId = mm.TextureId; cm.MeshId = mm.MeshId
+                        else mm:Clone().Parent = cp end
                     end
                 end
             end)
         end
     end
 
-    -- 5. Copy BodyColors
-    local modelBC = model:FindFirstChildOfClass("BodyColors")
-    if modelBC then modelBC:Clone().Parent = char end
+    -- BodyColors
+    local mBC = model:FindFirstChildOfClass("BodyColors")
+    if mBC then mBC:Clone().Parent = char end
 
-    -- 6. Copy body SCALES (height, width, depth, head size, body type, proportions)
-    --    These live as NumberValue children of Humanoid
+    -- Body scales
     pcall(function()
-        local modelHum = model:FindFirstChildOfClass("Humanoid")
-        local charHum  = char:FindFirstChildOfClass("Humanoid")
-        if modelHum and charHum then
-            local scales = {
-                "BodyDepthScale","BodyHeightScale","BodyProportionScale",
-                "BodyTypeScale","BodyWidthScale","HeadScale"
-            }
-            for _, s in ipairs(scales) do
-                local mV = modelHum:FindFirstChild(s)
-                local cV = charHum:FindFirstChild(s)
-                if mV and cV then cV.Value = mV.Value end
+        local mH = model:FindFirstChildOfClass("Humanoid")
+        local cH = char:FindFirstChildOfClass("Humanoid")
+        if mH and cH then
+            for _, s in ipairs({"BodyDepthScale","BodyHeightScale","BodyProportionScale","BodyTypeScale","BodyWidthScale","HeadScale"}) do
+                local mv = mH:FindFirstChild(s); local cv = cH:FindFirstChild(s)
+                if mv and cv then cv.Value = mv.Value end
             end
         end
     end)
 
-    -- 7. Copy all accessories (rigid hats + layered WrapLayer outfit pieces)
+    -- Accessories + clothing
     for _, v in pairs(model:GetChildren()) do
-        if v:IsA("Accessory") then
+        if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") then
             pcall(function() v:Clone().Parent = char end)
         end
     end
 
-    -- 8. Copy Shirt / Pants / ShirtGraphic
-    for _, v in pairs(model:GetChildren()) do
-        if v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") then
-            pcall(function() v:Clone().Parent = char end)
-        end
-    end
-
-    -- 9. Copy face decal
+    -- Face decal
     pcall(function()
-        local mHead = model:FindFirstChild("Head")
-        local cHead = char:FindFirstChild("Head")
+        local mHead = model:FindFirstChild("Head"); local cHead = char:FindFirstChild("Head")
         if mHead and cHead then
             for _, d in pairs(mHead:GetChildren()) do
                 if d:IsA("Decal") then
-                    local existing = cHead:FindFirstChildOfClass("Decal")
-                    if existing then existing.Texture = d.Texture
-                    else d:Clone().Parent = cHead end
+                    local ex = cHead:FindFirstChildOfClass("Decal")
+                    if ex then ex.Texture = d.Texture else d:Clone().Parent = cHead end
                 end
             end
         end
     end)
-
     model:Destroy()
 
-    -- 10. Heartbeat color lock — if server resets part.Color, restore it each frame
-    if avatarColorConn then pcall(function() avatarColorConn:Disconnect() end) end
+    -- Heartbeat color lock (fallback path only)
     avatarColorConn = RunService.Heartbeat:Connect(function()
         if not char.Parent then avatarColorConn:Disconnect(); return end
         for part, col in pairs(colorLock) do
