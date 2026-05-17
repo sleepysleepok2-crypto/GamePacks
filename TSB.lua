@@ -645,10 +645,16 @@ mainTab:CreateToggle({
     Name="Speed Boost", CurrentValue=false, Flag="SpeedBoost",
     Callback=function(v) tpwalking = v end,
 })
-mainTab:CreateSlider({
-    Name="Speed Multiplier", Range={0,5}, Increment=0.1, Suffix="x",
-    CurrentValue=0.1, Flag="SpeedSlider",
-    Callback=function(v) tspeed = v end,
+-- Speed Multiplier: type value 0–5  (replaces slider — no broken min-value look)
+mainTab:CreateInput({
+    Name="Speed Multiplier  (0 – 5)",
+    PlaceholderText="Default: 0.1",
+    Flag="SpeedInput",
+    RemoveTextAfterFocusLost=false,
+    Callback=function(v)
+        local n = tonumber(v)
+        if n then tspeed = math.clamp(n, 0, 5) end
+    end,
 })
 
 mainTab:CreateDivider()
@@ -659,28 +665,42 @@ mainTab:CreateToggle({
         if humanoid then humanoid.UseJumpPower = not v end
     end,
 })
-mainTab:CreateSlider({
-    Name="Jump Height", Range={7.2,500}, Increment=0.1, Suffix="%",
-    CurrentValue=7.2, Flag="JumpSlider",
+-- Jump Height: type value 7.2–500
+mainTab:CreateInput({
+    Name="Jump Height  (7.2 – 500)",
+    PlaceholderText="Default: 7.2",
+    Flag="JumpInput",
+    RemoveTextAfterFocusLost=false,
     Callback=function(v)
-        if humanoid then humanoid.JumpHeight = v end
+        local n = tonumber(v)
+        if n and humanoid then humanoid.JumpHeight = math.clamp(n, 0, 500) end
     end,
 })
 
 mainTab:CreateDivider()
 
-mainTab:CreateSlider({
-    Name="Gravity", Range={0,192.6}, Increment=0.1, Suffix="%",
-    CurrentValue=192.6, Flag="GravitySlider",
-    Callback=function(v) workspace.Gravity = v end,
+-- Gravity: type value 0–300  (default 192.6 = normal)
+mainTab:CreateInput({
+    Name="Gravity  (0 – 300, default 192.6)",
+    PlaceholderText="Default: 192.6",
+    Flag="GravityInput",
+    RemoveTextAfterFocusLost=false,
+    Callback=function(v)
+        local n = tonumber(v)
+        if n then workspace.Gravity = math.clamp(n, 0, 300) end
+    end,
 })
 
-mainTab:CreateSlider({
-    Name="FOV", Range={10,120}, Increment=1, Suffix="°",
-    CurrentValue=70, Flag="FOVSlider",
+-- FOV: type value 10–120  (default 70)
+mainTab:CreateInput({
+    Name="FOV  (10 – 120)",
+    PlaceholderText="Default: 70",
+    Flag="FOVInput",
+    RemoveTextAfterFocusLost=false,
     Callback=function(v)
-        if workspace.CurrentCamera then
-            workspace.CurrentCamera.FieldOfView = v
+        local n = tonumber(v)
+        if n and workspace.CurrentCamera then
+            workspace.CurrentCamera.FieldOfView = math.clamp(n, 10, 120)
         end
     end,
 })
@@ -1006,13 +1026,19 @@ local function applyVisualAvatar(uid)
     -- Stop any previous color lock
     if avatarColorConn then pcall(function() avatarColorConn:Disconnect() end); avatarColorConn = nil end
 
-    -- 1. Get HumanoidDescription of target player
+    -- 1. Get HumanoidDescription — Async variant (same as AvatarChanger.lua source)
     local ok, desc = pcall(function()
-        return Players:GetHumanoidDescriptionFromUserId(uid)
+        return Players:GetHumanoidDescriptionFromUserIdAsync(uid)
     end)
+    if not ok or not desc then
+        -- Fallback: non-async version
+        ok, desc = pcall(function()
+            return Players:GetHumanoidDescriptionFromUserId(uid)
+        end)
+    end
     if not ok or not desc then return false, "Bad ID: " .. tostring(desc) end
 
-    -- 2. PRIMARY: ApplyDescriptionClientServer  (executor-level API)
+    -- 2. PRIMARY: ApplyDescriptionClientServer (executor-level API)
     --    Handles 100% of the avatar in one call — body shape, colors,
     --    ALL accessories, layered clothing, face, etc.
     local primaryOk = pcall(function()
@@ -1020,7 +1046,8 @@ local function applyVisualAvatar(uid)
     end)
 
     if primaryOk then
-        -- Restart Animate script so animations work with the new rig
+        -- Small wait before restarting Animate (matches AvatarChanger.lua timing)
+        task.wait(0.1)
         pcall(function()
             local anim = char:FindFirstChild("Animate")
             if anim then
