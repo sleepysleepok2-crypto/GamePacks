@@ -1059,8 +1059,8 @@ local avatarApplying = false
 -- ── Pure visual helpers (no ApplyDescription / server calls) ────────────────
 
 -- Strip all visual decorations from the character (client-side only)
-local function clearVisuals(char: Model)
-    for _, c: Instance in ipairs(char:GetChildren()) do
+local function clearVisuals(char)
+    for _, c in ipairs(char:GetChildren()) do
         if c:IsA("Accessory") or c:IsA("Hat") or c:IsA("Shirt") or
            c:IsA("Pants") or c:IsA("ShirtGraphic") or c:IsA("CharacterMesh") then
             pcall(function() c:Destroy() end)
@@ -1069,7 +1069,7 @@ local function clearVisuals(char: Model)
     -- Remove face decal from Head
     local head = char:FindFirstChild("Head")
     if head then
-        for _, d: Instance in ipairs(head:GetChildren()) do
+        for _, d in ipairs(head:GetChildren()) do
             if d:IsA("Decal") and d.Name:lower() == "face" then
                 pcall(function() d:Destroy() end)
             end
@@ -1081,18 +1081,18 @@ local function clearVisuals(char: Model)
 end
 
 -- Attach an accessory visually using WeldConstraint + Attachment name matching
-local function attachAccessory(char: Model, accessory: Accessory)
+local function attachAccessory(char, accessory)
     local handle = accessory:FindFirstChild("Handle")
     if not handle then return end
-    local targetAtt: Attachment?, accAtt: Attachment?
-    for _, part: Instance in ipairs(char:GetChildren()) do
+    local targetAtt, accAtt
+    for _, part in ipairs(char:GetChildren()) do
         if part:IsA("BasePart") then
-            for _, att: Instance in ipairs(part:GetChildren()) do
+            for _, att in ipairs(part:GetChildren()) do
                 if att:IsA("Attachment") then
                     local match = handle:FindFirstChild(att.Name)
                     if match and match:IsA("Attachment") then
-                        targetAtt = att :: Attachment
-                        accAtt    = match :: Attachment
+                        targetAtt = att
+                        accAtt    = match
                         break
                     end
                 end
@@ -1101,22 +1101,22 @@ local function attachAccessory(char: Model, accessory: Accessory)
         if targetAtt then break end
     end
     if targetAtt and accAtt then
-        ;(handle :: BasePart).CFrame = targetAtt.WorldCFrame * accAtt.CFrame:Inverse()
+        handle.CFrame = targetAtt.WorldCFrame * accAtt.CFrame:Inverse()
     else
         local root = char:FindFirstChild("HumanoidRootPart")
-        if root then (handle :: BasePart).CFrame = (root :: BasePart).CFrame end
+        if root then handle.CFrame = root.CFrame end
     end
-    local weld      = Instance.new("WeldConstraint")
-    weld.Part0      = handle :: BasePart
-    weld.Part1      = (targetAtt and targetAtt.Parent :: BasePart)
-                   or char:FindFirstChild("HumanoidRootPart") :: BasePart
-                   or char:FindFirstChild("Head") :: BasePart
-    weld.Parent     = handle
+    local weld   = Instance.new("WeldConstraint")
+    weld.Part0   = handle
+    weld.Part1   = (targetAtt and targetAtt.Parent)
+                or char:FindFirstChild("HumanoidRootPart")
+                or char:FindFirstChild("Head")
+    weld.Parent  = handle
     accessory.Parent = char
 end
 
 -- Apply appearance from any userId — purely visual, no server side-effects
-local function applyVisual(userId: number)
+local function applyVisual(userId)
     if avatarApplying then
         Rayfield:Notify({ Title="Avatar", Content="Already applying, please wait...", Duration=2, Image=4483362458 })
         return
@@ -1143,15 +1143,15 @@ local function applyVisual(userId: number)
         local bc = model:FindFirstChildOfClass("BodyColors")
         if bc then bc:Clone().Parent = char end
         -- Clothing
-        for _, item: Instance in ipairs(model:GetChildren()) do
+        for _, item in ipairs(model:GetChildren()) do
             if item:IsA("Shirt") or item:IsA("Pants") or item:IsA("ShirtGraphic") then
                 item:Clone().Parent = char
             end
         end
         -- Accessories (WeldConstraint-based visual attachment)
-        for _, acc: Instance in ipairs(model:GetChildren()) do
+        for _, acc in ipairs(model:GetChildren()) do
             if acc:IsA("Accessory") or acc:IsA("Hat") then
-                pcall(function() attachAccessory(char, acc:Clone() :: Accessory) end)
+                pcall(function() attachAccessory(char, acc:Clone()) end)
             end
         end
         -- Face decal
@@ -1170,7 +1170,7 @@ end
 local function restartAvatar()
     local char = LocalPlayer.Character
     if not char then return end
-    for _, c: Instance in ipairs(char:GetChildren()) do
+    for _, c in ipairs(char:GetChildren()) do
         if c:IsA("Accessory") or c:IsA("Hat") or c:IsA("Shirt") or
            c:IsA("Pants") or c:IsA("ShirtGraphic") or c:IsA("CharacterMesh") or
            c:IsA("BodyColors") then
@@ -1179,7 +1179,7 @@ local function restartAvatar()
     end
     local head = char:FindFirstChild("Head")
     if head then
-        for _, d: Instance in ipairs(head:GetChildren()) do
+        for _, d in ipairs(head:GetChildren()) do
             if d:IsA("Decal") and d.Name:lower() == "face" then
                 pcall(function() d:Destroy() end)
             end
