@@ -145,12 +145,39 @@ task.spawn(function()
 
         -- Slider visibility: Rayfield tweens the frame (doesn't set Visible immediately),
         -- so a signal-based approach fires too late.  Heartbeat polling is instant.
+        -- inputFrames: TextBox containers that should stay at their expanded width.
+        -- inputFrameMaxW: maps each frame → the largest AbsoluteSize.X we have seen.
+        local inputFrames    = {}
+        local inputFrameMaxW = {}
+
         local lastVisible = mainFrame.Visible
         RunService.Heartbeat:Connect(function()
+            -- 1) Slider / window visibility sync
             local v = mainFrame.Visible
             if v ~= lastVisible then
                 lastVisible = v
                 rfGui.Enabled = v
+            end
+            -- 2) Keep TextBox containers at their expanded (focused) width
+            for i = #inputFrames, 1, -1 do
+                local f = inputFrames[i]
+                if not f or not f.Parent then
+                    table.remove(inputFrames, i)
+                    inputFrameMaxW[f] = nil
+                else
+                    local abs = f.AbsoluteSize.X
+                    local stored = inputFrameMaxW[f] or 0
+                    if abs > stored + 4 then
+                        -- Frame just expanded (user focused it) – record new max
+                        inputFrameMaxW[f] = abs
+                    elseif stored > 20 and abs < stored - 8 then
+                        -- Frame is collapsing – restore to recorded max width
+                        f.Size = UDim2.new(
+                            f.Size.X.Scale, stored,
+                            f.Size.Y.Scale, f.Size.Y.Offset
+                        )
+                    end
+                end
             end
         end)
 
@@ -191,16 +218,24 @@ task.spawn(function()
                             if corner then corner.CornerRadius = UDim.new(0, 4) end
                         end
                     end
-                    -- ── TextBox inputs: fix overflow on focus-loss ────────────────
-                    -- When the user types a long ID and clicks away, Rayfield shrinks
-                    -- the box but the text stays full-size and bleeds outside.
-                    -- Fix: clip the parent + auto-scale font down to fit.
+                    -- ── TextBox inputs ────────────────────────────────────────────
+                    -- 1. Clip the container so text never bleeds outside the box.
+                    -- 2. Auto-scale font so numbers always fit.
+                    -- 3. Register the container in inputFrames so the Heartbeat above
+                    --    keeps it at its expanded (focused) width even when unfocused.
                     if obj:IsA("TextBox") then
-                        -- Clip text to the input box bounds
-                        if obj.Parent and obj.Parent:IsA("Frame") then
-                            obj.Parent.ClipsDescendants = true
+                        local inputFrame = obj.Parent
+                        if inputFrame and inputFrame:IsA("Frame") then
+                            inputFrame.ClipsDescendants = true
+                            -- Add to tracking list (avoid duplicates)
+                            local already = false
+                            for _, f in ipairs(inputFrames) do
+                                if f == inputFrame then already = true; break end
+                            end
+                            if not already then
+                                table.insert(inputFrames, inputFrame)
+                            end
                         end
-                        -- Auto-scale font: shrinks when text is too wide, never grows past 13
                         if not obj:FindFirstChildOfClass("UITextSizeConstraint") then
                             local sc = Instance.new("UITextSizeConstraint", obj)
                             sc.MaxTextSize = 13
@@ -1054,47 +1089,6 @@ local function avatarGetDesc(id)
     return nil
 end
 
--- Build "allowed" list via GetCharacterAppearanceAsync
--- Returns which accessories/clothing the target avatar actually has,
--- so we only remove items that don't belong to the new avatar.
-local function avatarBuildAllowed(userId)
-    local ok, model = pcall(function()
-        return Players:GetCharacterAppearanceAsync(userId)
-    end)
-    if not ok or not model then return nil end
-    local allowedAcc = {}
-    local allowedShirt, allowedPants, allowedGraphic
-    for _, inst in ipairs(model:GetChildren()) do
-        if inst:IsA("Accessory") then
-            allowedAcc[inst.Name] = true
-        elseif inst:IsA("Shirt") then
-            allowedShirt = inst.ShirtTemplate
-        elseif inst:IsA("Pants") then
-            allowedPants = inst.PantsTemplate
-        elseif inst:IsA("ShirtGraphic") then
-            allowedGraphic = inst.Graphic
-        end
-    end
-    model:Destroy()
-    return { Accessories = allowedAcc, Shirt = allowedShirt, Pants = allowedPants, Graphic = allowedGraphic }
-end
-
--- Selective cleanup: removes items NOT present in the allowed list
-local function avatarSelectiveClean(char, allowed)
-    if not allowed then return end
-    for _, v in ipairs(char:GetChildren()) do
-        if v:IsA("Accessory") then
-            if not allowed.Accessories[v.Name] then pcall(function() v:Destroy() end) end
-        elseif v:IsA("Shirt") then
-            if not allowed.Shirt or v.ShirtTemplate ~= allowed.Shirt then pcall(function() v:Destroy() end) end
-        elseif v:IsA("Pants") then
-            if not allowed.Pants or v.PantsTemplate ~= allowed.Pants then pcall(function() v:Destroy() end) end
-        elseif v:IsA("ShirtGraphic") then
-            if not allowed.Graphic or v.Graphic ~= allowed.Graphic then pcall(function() v:Destroy() end) end
-        end
-    end
-end
-
 -- Full clean: removes all accessories/clothing/BodyColors while keeping scripts and tools
 local function avatarFullClean(char)
     -- Mark scripts and their direct parents as safe
@@ -1115,15 +1109,12 @@ local function avatarFullClean(char)
     end
 end
 
--- Restart Avatar: strips ALL accessories (hats, hair, etc.) from the character
+-- Restart Avatar: strips ALL visual decorations (hair, hats, accessories,
+-- clothing, BodyColors) so the character looks completely bare.
 local function restartAvatar()
     local char = LocalPlayer.Character
     if not char then return end
-    for _, c in ipairs(char:GetChildren()) do
-        if c:IsA("Accessory") or c:IsA("Hat") then
-            pcall(function() c:Destroy() end)
-        end
-    end
+    avatarFullClean(char)
 end
 
 -- Apply full avatar appearance from a userId
@@ -1157,13 +1148,8 @@ local function applyAppearance(userId)
             return
         end
 
-        -- Try selective cleanup first; fall back to full clean
-        local allowed = avatarBuildAllowed(userId)
-        if allowed then
-            avatarSelectiveClean(char, allowed)
-        else
-            avatarFullClean(char)
-        end
+        -- Always full-clean before applying so re-applying the same ID always works
+        avatarFullClean(char)
 
         -- Apply description (body shape, colors, accessories, clothing, face)
         avatarApplyDesc(hum, desc)
