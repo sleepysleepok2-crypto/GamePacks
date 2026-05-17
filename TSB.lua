@@ -1026,104 +1026,168 @@ movesetTab:CreateButton({
 -------------------------------------------------------------------------------
 local avatarTab = Window:CreateTab("👤 Avatar", "user")
 
-local avatarUserId = ""
+local avatarUserId   = ""
+local avatarApplying = false
+local avatarDescCache = {}
 
--- Removes all visual decorations from the character
-local function clearVisuals(char)
-    for _, inst in ipairs(char:GetChildren()) do
-        if inst:IsA("Accessory") or inst:IsA("Hat") or inst:IsA("Shirt")
-        or inst:IsA("Pants") or inst:IsA("ShirtGraphic") or inst:IsA("CharacterMesh") then
-            pcall(function() inst:Destroy() end)
+-- Apply HumanoidDescription: tries ApplyDescriptionClientServer, falls back to ApplyDescription
+local function avatarApplyDesc(hum, desc)
+    pcall(function()
+        if hum.ApplyDescriptionClientServer then
+            hum:ApplyDescriptionClientServer(desc)
+        else
+            hum:ApplyDescription(desc)
         end
-    end
-    local head = char:FindFirstChild("Head")
-    if head then
-        for _, d in ipairs(head:GetChildren()) do
-            if d:IsA("Decal") and d.Name:lower() == "face" then
-                pcall(function() d:Destroy() end)
-            end
-        end
-    end
-    local bc = char:FindFirstChildOfClass("BodyColors")
-    if bc then pcall(function() bc:Destroy() end) end
+    end)
 end
 
--- Attaches an accessory to the character using WeldConstraint + Attachment matching
-local function attachAccessory(char, accessory)
-    local handle = accessory:FindFirstChild("Handle")
-    if not handle then return end
-    local targetAttachment, accAttachment
-    for _, part in ipairs(char:GetChildren()) do
-        if part:IsA("BasePart") then
-            for _, att in ipairs(part:GetChildren()) do
-                if att:IsA("Attachment") then
-                    local match = handle:FindFirstChild(att.Name)
-                    if match and match:IsA("Attachment") then
-                        targetAttachment = att
-                        accAttachment = match
-                        break
-                    end
-                end
-            end
-        end
-        if targetAttachment then break end
+-- Get HumanoidDescription with local cache (avoids repeated API calls)
+local function avatarGetDesc(id)
+    if avatarDescCache[id] then return avatarDescCache[id] end
+    local ok, desc = pcall(function()
+        return Players:GetHumanoidDescriptionFromUserId(id)
+    end)
+    if ok and desc then
+        avatarDescCache[id] = desc
+        return desc
     end
-    if targetAttachment and accAttachment then
-        handle.CFrame = targetAttachment.WorldCFrame * accAttachment.CFrame:Inverse()
-    else
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if root then handle.CFrame = root.CFrame end
-    end
-    local weld = Instance.new("WeldConstraint")
-    weld.Part0 = handle
-    weld.Part1 = (targetAttachment and targetAttachment.Parent)
-        or char:FindFirstChild("HumanoidRootPart")
-        or char:FindFirstChild("Head")
-    weld.Parent = handle
-    accessory.Parent = char
+    return nil
 end
 
--- Applies a player's full appearance: body colors, clothing, accessories, face
-local function applyAppearance(userId)
-    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+-- Build "allowed" list via GetCharacterAppearanceAsync
+-- Returns which accessories/clothing the target avatar actually has,
+-- so we only remove items that don't belong to the new avatar.
+local function avatarBuildAllowed(userId)
     local ok, model = pcall(function()
         return Players:GetCharacterAppearanceAsync(userId)
     end)
-    if not ok or not model then
-        return false, "Failed to load appearance: " .. tostring(model)
-    end
-    clearVisuals(char)
-    -- Body colors
-    local bc = model:FindFirstChildOfClass("BodyColors")
-    if bc then bc:Clone().Parent = char end
-    -- Clothing
-    for _, item in ipairs(model:GetChildren()) do
-        if item:IsA("Shirt") or item:IsA("Pants") or item:IsA("ShirtGraphic") then
-            item:Clone().Parent = char
-        end
-    end
-    -- Accessories
-    for _, acc in ipairs(model:GetChildren()) do
-        if acc:IsA("Accessory") or acc:IsA("Hat") then
-            pcall(function() attachAccessory(char, acc:Clone()) end)
-        end
-    end
-    -- Face decal
-    local head = char:FindFirstChild("Head")
-    if head then
-        local face = model:FindFirstChild("face", true)
-        if face and face:IsA("Decal") then
-            face:Clone().Parent = head
+    if not ok or not model then return nil end
+    local allowedAcc = {}
+    local allowedShirt, allowedPants, allowedGraphic
+    for _, inst in ipairs(model:GetChildren()) do
+        if inst:IsA("Accessory") then
+            allowedAcc[inst.Name] = true
+        elseif inst:IsA("Shirt") then
+            allowedShirt = inst.ShirtTemplate
+        elseif inst:IsA("Pants") then
+            allowedPants = inst.PantsTemplate
+        elseif inst:IsA("ShirtGraphic") then
+            allowedGraphic = inst.Graphic
         end
     end
     model:Destroy()
-    return true
+    return { Accessories = allowedAcc, Shirt = allowedShirt, Pants = allowedPants, Graphic = allowedGraphic }
 end
 
--- Resets the character to its original appearance
-local function resetCharacter()
-    pcall(function() LocalPlayer:LoadCharacter() end)
+-- Selective cleanup: removes items NOT present in the allowed list
+local function avatarSelectiveClean(char, allowed)
+    if not allowed then return end
+    for _, v in ipairs(char:GetChildren()) do
+        if v:IsA("Accessory") then
+            if not allowed.Accessories[v.Name] then pcall(function() v:Destroy() end) end
+        elseif v:IsA("Shirt") then
+            if not allowed.Shirt or v.ShirtTemplate ~= allowed.Shirt then pcall(function() v:Destroy() end) end
+        elseif v:IsA("Pants") then
+            if not allowed.Pants or v.PantsTemplate ~= allowed.Pants then pcall(function() v:Destroy() end) end
+        elseif v:IsA("ShirtGraphic") then
+            if not allowed.Graphic or v.Graphic ~= allowed.Graphic then pcall(function() v:Destroy() end) end
+        end
+    end
 end
+
+-- Full clean: removes all accessories/clothing/BodyColors while keeping scripts and tools
+local function avatarFullClean(char)
+    -- Mark scripts and their direct parents as safe
+    local safe = {}
+    for _, o in ipairs(char:GetDescendants()) do
+        if o:IsA("BaseScript") then
+            safe[o] = true
+            if o.Parent then safe[o.Parent] = true end
+        end
+    end
+    for _, c in ipairs(char:GetChildren()) do
+        if safe[c] then continue end
+        if c:IsA("Accessory") or c:IsA("Hat") or c:IsA("BodyColors") or
+           c:IsA("CharacterMesh") or c:IsA("Shirt") or c:IsA("Pants") or
+           c:IsA("ShirtGraphic") then
+            pcall(function() c:Destroy() end)
+        end
+    end
+end
+
+-- Restart Avatar: strips ALL accessories (hats, hair, etc.) from the character
+local function restartAvatar()
+    local char = LocalPlayer.Character
+    if not char then return end
+    for _, c in ipairs(char:GetChildren()) do
+        if c:IsA("Accessory") or c:IsA("Hat") then
+            pcall(function() c:Destroy() end)
+        end
+    end
+end
+
+-- Apply full avatar appearance from a userId
+local function applyAppearance(userId)
+    if avatarApplying then
+        Rayfield:Notify({ Title="Avatar", Content="Already applying, please wait...", Duration=2, Image=4483362458 })
+        return
+    end
+    avatarApplying = true
+    Rayfield:Notify({ Title="Avatar", Content="Loading appearance...", Duration=2, Image=4483362458 })
+
+    task.spawn(function()
+        local char = LocalPlayer.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") then
+            avatarApplying = false
+            Rayfield:Notify({ Title="Avatar", Content="No character found!", Duration=3, Image=4483362458 })
+            return
+        end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum then
+            avatarApplying = false
+            Rayfield:Notify({ Title="Avatar", Content="No Humanoid!", Duration=3, Image=4483362458 })
+            return
+        end
+
+        -- Fetch HumanoidDescription (cached)
+        local desc = avatarGetDesc(userId)
+        if not desc then
+            avatarApplying = false
+            Rayfield:Notify({ Title="Avatar", Content="Failed to fetch avatar!", Duration=4, Image=4483362458 })
+            return
+        end
+
+        -- Try selective cleanup first; fall back to full clean
+        local allowed = avatarBuildAllowed(userId)
+        if allowed then
+            avatarSelectiveClean(char, allowed)
+        else
+            avatarFullClean(char)
+        end
+
+        -- Apply description (body shape, colors, accessories, clothing, face)
+        avatarApplyDesc(hum, desc)
+
+        -- Ensure BodyColors match the description exactly
+        local bc = char:FindFirstChildOfClass("BodyColors")
+        if not bc then
+            bc = Instance.new("BodyColors")
+            bc.Parent = char
+        end
+        bc.HeadColor3     = desc.HeadColor
+        bc.TorsoColor3    = desc.TorsoColor
+        bc.LeftArmColor3  = desc.LeftArmColor
+        bc.RightArmColor3 = desc.RightArmColor
+        bc.LeftLegColor3  = desc.LeftLegColor
+        bc.RightLegColor3 = desc.RightLegColor
+
+        avatarApplying = false
+        Rayfield:Notify({ Title="Avatar", Content="Skin applied!", Duration=3, Image=4483362458 })
+    end)
+end
+
+avatarTab:CreateSection("⚠ Warning")
+avatarTab:CreateLabel("Before starting avatar changer — press Restart Avatar first.")
 
 avatarTab:CreateSection("Load Avatar by User ID")
 avatarTab:CreateInput({
@@ -1142,23 +1206,22 @@ avatarTab:CreateButton({
             Rayfield:Notify({ Title="Avatar", Content="Invalid User ID!", Duration=3, Image=4483362458 })
             return
         end
-        Rayfield:Notify({ Title="Avatar", Content="Loading appearance...", Duration=2, Image=4483362458 })
-        task.spawn(function()
-            local ok, err = applyAppearance(uid)
-            Rayfield:Notify({
-                Title    = "Avatar",
-                Content  = ok and "Skin applied successfully!" or ("Failed: " .. tostring(err)),
-                Duration = 4,
-                Image    = 4483362458,
-            })
-        end)
+        applyAppearance(uid)
+    end,
+})
+
+avatarTab:CreateButton({
+    Name = "Restart Avatar",
+    Callback = function()
+        restartAvatar()
+        Rayfield:Notify({ Title="Avatar", Content="All accessories removed.", Duration=3, Image=4483362458 })
     end,
 })
 
 avatarTab:CreateButton({
     Name = "Reset Avatar",
     Callback = function()
-        resetCharacter()
+        pcall(function() LocalPlayer:LoadCharacter() end)
         Rayfield:Notify({ Title="Avatar", Content="Character reset.", Duration=3, Image=4483362458 })
     end,
 })
@@ -1310,3 +1373,4 @@ Rayfield:Notify({
     Duration = 5,
     Image   = 4483362458,
 })
+
