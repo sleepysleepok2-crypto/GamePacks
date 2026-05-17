@@ -145,39 +145,16 @@ task.spawn(function()
 
         -- Slider visibility: Rayfield tweens the frame (doesn't set Visible immediately),
         -- so a signal-based approach fires too late.  Heartbeat polling is instant.
-        -- inputFrames: TextBox containers that should stay at their expanded width.
-        -- inputFrameMaxW: maps each frame → the largest AbsoluteSize.X we have seen.
-        local inputFrames    = {}
-        local inputFrameMaxW = {}
+        -- inputFrames: tracks TextBox parent frames (dedup only)
+        local inputFrames = {}
 
         local lastVisible = mainFrame.Visible
         RunService.Heartbeat:Connect(function()
-            -- 1) Slider / window visibility sync
+            -- Slider / window visibility sync
             local v = mainFrame.Visible
             if v ~= lastVisible then
                 lastVisible = v
                 rfGui.Enabled = v
-            end
-            -- 2) Keep TextBox containers at their expanded (focused) width
-            for i = #inputFrames, 1, -1 do
-                local f = inputFrames[i]
-                if not f or not f.Parent then
-                    table.remove(inputFrames, i)
-                    inputFrameMaxW[f] = nil
-                else
-                    local abs = f.AbsoluteSize.X
-                    local stored = inputFrameMaxW[f] or 0
-                    if abs > stored + 4 then
-                        -- Frame just expanded (user focused it) – record new max
-                        inputFrameMaxW[f] = abs
-                    elseif stored > 20 and abs < stored - 8 then
-                        -- Frame is collapsing – restore to recorded max width
-                        f.Size = UDim2.new(
-                            f.Size.X.Scale, stored,
-                            f.Size.Y.Scale, f.Size.Y.Offset
-                        )
-                    end
-                end
             end
         end)
 
@@ -219,27 +196,35 @@ task.spawn(function()
                         end
                     end
                     -- ── TextBox inputs ────────────────────────────────────────────
-                    -- 1. Clip the container so text never bleeds outside the box.
-                    -- 2. Auto-scale font so numbers always fit.
-                    -- 3. Force-expand the input holder to a static width and lock it
-                    --    via the Heartbeat so it never collapses on focus-loss.
+                    -- Fix: Rayfield tweens the input-holder frame to 0 width on
+                    -- FocusLost.  We lock it at a static 160 px using
+                    -- GetPropertyChangedSignal (fires synchronously → wins against
+                    -- TweenService every frame without a polling loop).
                     if obj:IsA("TextBox") then
-                        local inputFrame = obj.Parent
-                        if inputFrame and inputFrame:IsA("Frame") then
-                            inputFrame.ClipsDescendants = true
-                            -- Luau: table.find avoids a manual loop for dedup check
-                            if not table.find(inputFrames, inputFrame) then
-                                table.insert(inputFrames, inputFrame)
-                                -- After Rayfield finishes its init tween (0.1 s is enough),
-                                -- force the frame to 160 px wide and tell the Heartbeat
-                                -- to keep it there.  Y dimension is preserved as-is.
-                                local capturedFrame = inputFrame
-                                task.delay(0.1, function()
-                                    if not capturedFrame.Parent then return end
-                                    local yS = capturedFrame.Size.Y.Scale
-                                    local yO = capturedFrame.Size.Y.Offset
-                                    capturedFrame.Size = UDim2.new(0, 160, yS, yO)
-                                    inputFrameMaxW[capturedFrame] = 160
+                        local f = obj.Parent
+                        if f and f:IsA("Frame") then
+                            f.ClipsDescendants = true
+                            if not table.find(inputFrames, f) then
+                                table.insert(inputFrames, f)
+                                local captured = f
+                                task.delay(0.15, function()
+                                    if not captured.Parent then return end
+                                    -- Freeze width; preserve Rayfield's Y (usually scale=1)
+                                    local locked = UDim2.new(
+                                        0, 160,
+                                        captured.Size.Y.Scale,
+                                        captured.Size.Y.Offset
+                                    )
+                                    captured.Size = locked
+                                    -- Guard prevents re-entrancy when we set Size inside
+                                    -- the signal handler
+                                    local guard = false
+                                    captured:GetPropertyChangedSignal("Size"):Connect(function()
+                                        if guard then return end
+                                        guard = true
+                                        captured.Size = locked
+                                        guard = false
+                                    end)
                                 end)
                             end
                         end
@@ -1070,56 +1055,118 @@ local avatarTab = Window:CreateTab("👤 Avatar", "user")
 
 local avatarUserId   = ""
 local avatarApplying = false
-local avatarDescCache = {}
 
--- Apply HumanoidDescription: tries ApplyDescriptionClientServer, falls back to ApplyDescription
-local function avatarApplyDesc(hum, desc)
-    pcall(function()
-        if hum.ApplyDescriptionClientServer then
-            hum:ApplyDescriptionClientServer(desc)
-        else
-            hum:ApplyDescription(desc)
-        end
-    end)
-end
+-- ── Pure visual helpers (no ApplyDescription / server calls) ────────────────
 
--- Get HumanoidDescription with local cache (avoids repeated API calls)
-local function avatarGetDesc(id)
-    if avatarDescCache[id] then return avatarDescCache[id] end
-    local ok, desc = pcall(function()
-        return Players:GetHumanoidDescriptionFromUserId(id)
-    end)
-    if ok and desc then
-        avatarDescCache[id] = desc
-        return desc
-    end
-    return nil
-end
-
--- Full clean: removes all accessories/clothing/BodyColors while keeping scripts and tools
-local function avatarFullClean(char)
-    -- Mark scripts and their direct parents as safe
-    -- Only protect BaseScript instances that are DIRECT children of char
-    -- (e.g. the Animate LocalScript).  The old approach also protected the
-    -- *parent* of every descendant script, which caused accessories that
-    -- contain scripts (common in TSB) to be silently skipped.
-    local safe: {[Instance]: boolean} = {}
-    for _, o: Instance in ipairs(char:GetChildren()) do
-        if o:IsA("BaseScript") then safe[o] = true end
-    end
+-- Strip all visual decorations from the character (client-side only)
+local function clearVisuals(char: Model)
     for _, c: Instance in ipairs(char:GetChildren()) do
-        if safe[c] then continue end
-        if c:IsA("Accessory") or c:IsA("Hat") or c:IsA("BodyColors") or
-           c:IsA("CharacterMesh") or c:IsA("Shirt") or c:IsA("Pants") or
-           c:IsA("ShirtGraphic") then
+        if c:IsA("Accessory") or c:IsA("Hat") or c:IsA("Shirt") or
+           c:IsA("Pants") or c:IsA("ShirtGraphic") or c:IsA("CharacterMesh") then
             pcall(function() c:Destroy() end)
         end
     end
+    -- Remove face decal from Head
+    local head = char:FindFirstChild("Head")
+    if head then
+        for _, d: Instance in ipairs(head:GetChildren()) do
+            if d:IsA("Decal") and d.Name:lower() == "face" then
+                pcall(function() d:Destroy() end)
+            end
+        end
+    end
+    -- Remove BodyColors so skin colour is fully replaced
+    local bc = char:FindFirstChildOfClass("BodyColors")
+    if bc then pcall(function() bc:Destroy() end) end
 end
 
--- Restart Avatar: destroys every visual decoration on the character with NO
--- script-protection checks, so even accessories that contain LocalScripts
--- (common in TSB) are fully removed.
+-- Attach an accessory visually using WeldConstraint + Attachment name matching
+local function attachAccessory(char: Model, accessory: Accessory)
+    local handle = accessory:FindFirstChild("Handle")
+    if not handle then return end
+    local targetAtt: Attachment?, accAtt: Attachment?
+    for _, part: Instance in ipairs(char:GetChildren()) do
+        if part:IsA("BasePart") then
+            for _, att: Instance in ipairs(part:GetChildren()) do
+                if att:IsA("Attachment") then
+                    local match = handle:FindFirstChild(att.Name)
+                    if match and match:IsA("Attachment") then
+                        targetAtt = att :: Attachment
+                        accAtt    = match :: Attachment
+                        break
+                    end
+                end
+            end
+        end
+        if targetAtt then break end
+    end
+    if targetAtt and accAtt then
+        ;(handle :: BasePart).CFrame = targetAtt.WorldCFrame * accAtt.CFrame:Inverse()
+    else
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if root then (handle :: BasePart).CFrame = (root :: BasePart).CFrame end
+    end
+    local weld      = Instance.new("WeldConstraint")
+    weld.Part0      = handle :: BasePart
+    weld.Part1      = (targetAtt and targetAtt.Parent :: BasePart)
+                   or char:FindFirstChild("HumanoidRootPart") :: BasePart
+                   or char:FindFirstChild("Head") :: BasePart
+    weld.Parent     = handle
+    accessory.Parent = char
+end
+
+-- Apply appearance from any userId — purely visual, no server side-effects
+local function applyVisual(userId: number)
+    if avatarApplying then
+        Rayfield:Notify({ Title="Avatar", Content="Already applying, please wait...", Duration=2, Image=4483362458 })
+        return
+    end
+    avatarApplying = true
+    Rayfield:Notify({ Title="Avatar", Content="Loading appearance...", Duration=2, Image=4483362458 })
+    task.spawn(function()
+        local char = LocalPlayer.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") then
+            avatarApplying = false
+            Rayfield:Notify({ Title="Avatar", Content="No character!", Duration=3, Image=4483362458 })
+            return
+        end
+        local ok, model = pcall(function()
+            return Players:GetCharacterAppearanceAsync(userId)
+        end)
+        if not ok or not model then
+            avatarApplying = false
+            Rayfield:Notify({ Title="Avatar", Content="Failed to load appearance!", Duration=4, Image=4483362458 })
+            return
+        end
+        clearVisuals(char)
+        -- Body colours
+        local bc = model:FindFirstChildOfClass("BodyColors")
+        if bc then bc:Clone().Parent = char end
+        -- Clothing
+        for _, item: Instance in ipairs(model:GetChildren()) do
+            if item:IsA("Shirt") or item:IsA("Pants") or item:IsA("ShirtGraphic") then
+                item:Clone().Parent = char
+            end
+        end
+        -- Accessories (WeldConstraint-based visual attachment)
+        for _, acc: Instance in ipairs(model:GetChildren()) do
+            if acc:IsA("Accessory") or acc:IsA("Hat") then
+                pcall(function() attachAccessory(char, acc:Clone() :: Accessory) end)
+            end
+        end
+        -- Face decal
+        local head = char:FindFirstChild("Head")
+        if head then
+            local face = model:FindFirstChild("face", true)
+            if face and face:IsA("Decal") then face:Clone().Parent = head end
+        end
+        model:Destroy()
+        avatarApplying = false
+        Rayfield:Notify({ Title="Avatar", Content="Skin applied!", Duration=3, Image=4483362458 })
+    end)
+end
+
+-- Restart Avatar: remove ALL visual decorations (no script-protection bypass)
 local function restartAvatar()
     local char = LocalPlayer.Character
     if not char then return end
@@ -1130,62 +1177,17 @@ local function restartAvatar()
             pcall(function() c:Destroy() end)
         end
     end
-end
-
--- Apply full avatar appearance from a userId
-local function applyAppearance(userId)
-    if avatarApplying then
-        Rayfield:Notify({ Title="Avatar", Content="Already applying, please wait...", Duration=2, Image=4483362458 })
-        return
+    local head = char:FindFirstChild("Head")
+    if head then
+        for _, d: Instance in ipairs(head:GetChildren()) do
+            if d:IsA("Decal") and d.Name:lower() == "face" then
+                pcall(function() d:Destroy() end)
+            end
+        end
     end
-    avatarApplying = true
-    Rayfield:Notify({ Title="Avatar", Content="Loading appearance...", Duration=2, Image=4483362458 })
-
-    task.spawn(function()
-        local char = LocalPlayer.Character
-        if not char or not char:FindFirstChild("HumanoidRootPart") then
-            avatarApplying = false
-            Rayfield:Notify({ Title="Avatar", Content="No character found!", Duration=3, Image=4483362458 })
-            return
-        end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if not hum then
-            avatarApplying = false
-            Rayfield:Notify({ Title="Avatar", Content="No Humanoid!", Duration=3, Image=4483362458 })
-            return
-        end
-
-        -- Fetch HumanoidDescription (cached)
-        local desc = avatarGetDesc(userId)
-        if not desc then
-            avatarApplying = false
-            Rayfield:Notify({ Title="Avatar", Content="Failed to fetch avatar!", Duration=4, Image=4483362458 })
-            return
-        end
-
-        -- Always full-clean before applying so re-applying the same ID always works
-        avatarFullClean(char)
-
-        -- Apply description (body shape, colors, accessories, clothing, face)
-        avatarApplyDesc(hum, desc)
-
-        -- Ensure BodyColors match the description exactly
-        local bc = char:FindFirstChildOfClass("BodyColors")
-        if not bc then
-            bc = Instance.new("BodyColors")
-            bc.Parent = char
-        end
-        bc.HeadColor3     = desc.HeadColor
-        bc.TorsoColor3    = desc.TorsoColor
-        bc.LeftArmColor3  = desc.LeftArmColor
-        bc.RightArmColor3 = desc.RightArmColor
-        bc.LeftLegColor3  = desc.LeftLegColor
-        bc.RightLegColor3 = desc.RightLegColor
-
-        avatarApplying = false
-        Rayfield:Notify({ Title="Avatar", Content="Skin applied!", Duration=3, Image=4483362458 })
-    end)
 end
+
+-- ── Avatar tab UI ────────────────────────────────────────────────────────────
 
 avatarTab:CreateSection("⚠ Warning")
 avatarTab:CreateLabel("Before starting avatar changer — press Restart Avatar first.")
@@ -1207,7 +1209,7 @@ avatarTab:CreateButton({
             Rayfield:Notify({ Title="Avatar", Content="Invalid User ID!", Duration=3, Image=4483362458 })
             return
         end
-        applyAppearance(uid)
+        applyVisual(uid)
     end,
 })
 
@@ -1222,51 +1224,8 @@ avatarTab:CreateButton({
 avatarTab:CreateButton({
     Name = "Reset Avatar",
     Callback = function()
-        local char = LocalPlayer.Character
-        local hum: Humanoid? = char and char:FindFirstChildOfClass("Humanoid") :: Humanoid?
-        if not char or not hum then
-            Rayfield:Notify({ Title="Avatar", Content="No character!", Duration=3, Image=4483362458 })
-            return
-        end
-        Rayfield:Notify({ Title="Avatar", Content="Restoring original avatar...", Duration=2, Image=4483362458 })
-        task.spawn(function()
-            -- Fetch the player's OWN HumanoidDescription (their real Roblox avatar)
-            local ok, ownDesc = pcall(function()
-                return Players:GetHumanoidDescriptionFromUserId(LocalPlayer.UserId)
-            end)
-            if ok and ownDesc then
-                -- Strip all visuals (no script-protection bypass needed here)
-                for _, c: Instance in ipairs(char:GetChildren()) do
-                    if c:IsA("Accessory") or c:IsA("Hat") or c:IsA("Shirt") or
-                       c:IsA("Pants") or c:IsA("ShirtGraphic") or c:IsA("CharacterMesh") or
-                       c:IsA("BodyColors") then
-                        pcall(function() c:Destroy() end)
-                    end
-                end
-                -- Apply own description
-                pcall(function()
-                    if hum.ApplyDescriptionClientServer then
-                        hum:ApplyDescriptionClientServer(ownDesc)
-                    else
-                        hum:ApplyDescription(ownDesc)
-                    end
-                end)
-                -- Sync BodyColors from own description
-                local bc = char:FindFirstChildOfClass("BodyColors")
-                if not bc then bc = Instance.new("BodyColors"); bc.Parent = char end
-                bc.HeadColor3     = ownDesc.HeadColor
-                bc.TorsoColor3    = ownDesc.TorsoColor
-                bc.LeftArmColor3  = ownDesc.LeftArmColor
-                bc.RightArmColor3 = ownDesc.RightArmColor
-                bc.LeftLegColor3  = ownDesc.LeftLegColor
-                bc.RightLegColor3 = ownDesc.RightLegColor
-                Rayfield:Notify({ Title="Avatar", Content="Original avatar restored!", Duration=3, Image=4483362458 })
-            else
-                -- Fallback if API fails
-                pcall(function() LocalPlayer:LoadCharacter() end)
-                Rayfield:Notify({ Title="Avatar", Content="Character reset.", Duration=3, Image=4483362458 })
-            end
-        end)
+        -- Re-applies the player's own appearance using the same visual path
+        applyVisual(LocalPlayer.UserId)
     end,
 })
 
