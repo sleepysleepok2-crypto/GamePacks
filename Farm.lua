@@ -105,7 +105,7 @@ local function Notify(title, msg, dur)
 end
 local function SetStatus(txt)
     if State.StatusLabel and State.StatusLabel.Parent then
-        State.StatusLabel:Set(txt)
+        State.StatusLabel:Set({ Title = "Status", Content = txt })
     end
 end
 
@@ -716,75 +716,74 @@ local function StartQuestFarm()
             if not quest then
                 SetStatus("⚠️ No quest found for level " .. lvl)
                 task.wait(3)
-                continue -- Lua 5.1: use goto or restructure — see below
-            end
+            else
+                SetStatus("📜 Level " .. lvl .. " → " .. quest.area)
+                Notify("Auto Farm", "Level " .. lvl .. " → " .. quest.area, 3)
 
-            SetStatus("📜 Level " .. lvl .. " → " .. quest.area)
-            Notify("Auto Farm", "Level " .. lvl .. " → " .. quest.area, 3)
+                -- Fly to quest NPC and accept quest
+                TryAcceptQuest(quest.questPos)
 
-            -- Fly to quest NPC and accept quest
-            TryAcceptQuest(quest.questPos)
+                -- Fly to mob farm area
+                SetStatus("⚔️ Farming: " .. quest.mobName)
+                local hoverFarmPos = quest.farmPos + Vector3.new(0, HOVER_HEIGHT, 0)
+                SafeTweenTo(hoverFarmPos, TWEEN_SPEED)
 
-            -- Fly to mob farm area
-            SetStatus("⚔️ Farming: " .. quest.mobName)
-            local hoverFarmPos = quest.farmPos + Vector3.new(0, HOVER_HEIGHT, 0)
-            SafeTweenTo(hoverFarmPos, TWEEN_SPEED)
+                local startLvl   = GetLevel()
+                local cycleStart = os.clock()
 
-            local startLvl   = GetLevel()
-            local cycleStart = os.clock()
+                -- Farm until level-up or 4 min timeout
+                while State.AutoQuestFarm and GetLevel() == startLvl and (os.clock() - cycleStart) < 240 do
+                    WaitForChar()
 
-            -- Farm until level-up or 4 min timeout
-            while State.AutoQuestFarm and GetLevel() == startLvl and (os.clock() - cycleStart) < 240 do
-                WaitForChar()
+                    -- Auto-collect fruits if enabled (interrupt farming)
+                    if State.AutoCollect then
+                        CollectNearbyFruits()
+                    end
 
-                -- Auto-collect fruits if enabled (interrupt farming)
-                if State.AutoCollect then
-                    CollectNearbyFruits()
-                end
+                    -- Find nearest quest mob (or any mob if none found by name)
+                    local mob = FindNearestMob(quest.mobName)
+                            or FindNearestMob(nil)
 
-                -- Find nearest quest mob (or any mob if none found by name)
-                local mob = FindNearestMob(quest.mobName)
-                        or FindNearestMob(nil)
+                    if mob then
+                        local mhrp = mob:FindFirstChild("HumanoidRootPart")
+                        if mhrp then
+                            -- Hover above mob
+                            local hoverPos = mhrp.Position + Vector3.new(0, HOVER_HEIGHT, 0)
+                            SafeTweenTo(hoverPos, TWEEN_SPEED)
+                            HoverAt(hoverPos)
 
-                if mob then
-                    local mhrp = mob:FindFirstChild("HumanoidRootPart")
-                    if mhrp then
-                        -- Hover above mob
-                        local hoverPos = mhrp.Position + Vector3.new(0, HOVER_HEIGHT, 0)
-                        SafeTweenTo(hoverPos, TWEEN_SPEED)
-                        HoverAt(hoverPos)
+                            -- Kill aura: attack rapidly while hovering
+                            local atkStart = os.clock()
+                            while State.AutoQuestFarm
+                              and mob.Parent
+                              and mob:FindFirstChildOfClass("Humanoid")
+                              and mob:FindFirstChildOfClass("Humanoid").Health > 0
+                              and (os.clock() - atkStart) < 15 do
+                                AttackWithTool()
+                                task.wait(0.08)
+                            end
 
-                        -- Kill aura: attack rapidly while hovering
-                        local atkStart = os.clock()
-                        while State.AutoQuestFarm
-                          and mob.Parent
-                          and mob:FindFirstChildOfClass("Humanoid")
-                          and mob:FindFirstChildOfClass("Humanoid").Health > 0
-                          and (os.clock() - atkStart) < 15 do
-                            AttackWithTool()
-                            task.wait(0.08)
+                            StopHover()
                         end
-
+                    else
+                        -- No mobs nearby — hover at farm area and wait
+                        HoverAt(hoverFarmPos)
+                        task.wait(2)
                         StopHover()
                     end
-                else
-                    -- No mobs nearby — hover at farm area and wait
-                    HoverAt(hoverFarmPos)
-                    task.wait(2)
-                    StopHover()
+                    task.wait(0.05)
                 end
-                task.wait(0.05)
+
+                StopHover()
+
+                if GetLevel() > startLvl then
+                    local newLvl = GetLevel()
+                    Notify("⬆️ Level Up!", "Now level " .. newLvl, 4)
+                    SetStatus("⬆️ Level up! Now " .. newLvl)
+                end
+
+                task.wait(0.5)
             end
-
-            StopHover()
-
-            if GetLevel() > startLvl then
-                local newLvl = GetLevel()
-                Notify("⬆️ Level Up!", "Now level " .. newLvl, 4)
-                SetStatus("⬆️ Level up! Now " .. newLvl)
-            end
-
-            task.wait(0.5)
         end
 
         StopHover()
