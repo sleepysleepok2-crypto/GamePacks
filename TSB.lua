@@ -154,33 +154,49 @@ task.spawn(function()
             end
         end)
 
-        -- Simplify slider style: remove all UIGradients from Rayfield GUI elements
-        -- so sliders look flat and plain instead of glossy/styled
-        local function flattenSliders(root)
+        -- Simplify slider style by STRUCTURE detection (don't rely on element names):
+        -- A slider container = wide Frame that has BOTH UIStroke AND UICorner children
+        -- Make the stroke grey+thin, flatten corner radius, strip gradients
+        local function simplifySliders(root)
             for _, obj in pairs(root:GetDescendants()) do
                 pcall(function()
-                    if obj:IsA("UIGradient") then
-                        obj:Destroy()
-                    end
-                    -- Make slider fill bars a flat solid color
-                    if obj:IsA("Frame") then
-                        local n = obj.Name:lower()
-                        if n == "progress" or n == "fill" or n == "sliderbar"
-                           or n == "drag" or n == "bar" then
-                            obj.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
-                            for _, c in pairs(obj:GetChildren()) do
-                                if c:IsA("UIGradient") or c:IsA("UIStroke") then c:Destroy() end
+                    if not obj:IsA("Frame") then return end
+                    local hasStroke = obj:FindFirstChildOfClass("UIStroke") ~= nil
+                    local hasCorner = obj:FindFirstChildOfClass("UICorner") ~= nil
+                    -- Slider tracks are wide (scale > 0.2 or offset > 100) and short
+                    local isWide = obj.Size.X.Scale > 0.2 or obj.Size.X.Offset > 100
+                    if hasStroke and hasCorner and isWide then
+                        -- Flatten the border
+                        local stroke = obj:FindFirstChildOfClass("UIStroke")
+                        stroke.Thickness = 1
+                        stroke.Color = Color3.fromRGB(70, 70, 70)
+                        -- Smaller corner radius → less pill-like
+                        local corner = obj:FindFirstChildOfClass("UICorner")
+                        corner.CornerRadius = UDim.new(0, 4)
+                        -- Strip any gradients on the container
+                        for _, c in pairs(obj:GetChildren()) do
+                            if c:IsA("UIGradient") then c:Destroy() end
+                        end
+                        -- Simplify child fill/progress frames too
+                        for _, child in pairs(obj:GetChildren()) do
+                            if child:IsA("Frame") then
+                                for _, cc in pairs(child:GetChildren()) do
+                                    if cc:IsA("UIGradient") then cc:Destroy() end
+                                end
+                                local cs = child:FindFirstChildOfClass("UIStroke")
+                                if cs then cs:Destroy() end
                             end
                         end
                     end
                 end)
             end
         end
-        task.wait(1)          -- let all tabs/sliders finish initialising
-        flattenSliders(rfGui)
+        task.wait(1.5)   -- wait for all tabs/sliders to fully render
+        simplifySliders(rfGui)
+        -- catch sliders created later (tab switches)
         rfGui.DescendantAdded:Connect(function()
-            task.wait(0.05)
-            pcall(flattenSliders, rfGui)
+            task.wait(0.1)
+            pcall(simplifySliders, rfGui)
         end)
     end)
 end)
@@ -974,112 +990,115 @@ local avatarUserId    = ""
 local keepAfterReset  = false
 local savedAvatarUid  = nil   -- store UID so we can re-apply on respawn (no server call)
 
--- Visual-only avatar: manipulates local character directly, no server calls
--- Others always see your real avatar
-local avatarColorConn = nil  -- heartbeat lock so TSB can't reset colors
+-- Visual-only avatar using CreateHumanoidModelFromDescription
+-- This is the ONLY reliable client-side method — builds a full model
+-- with correct SurfaceAppearance, WrapDeformers, layered clothing, etc.
+-- then copies every visual element directly to the local character.
+local avatarColorConn = nil
 
 local function applyVisualAvatar(uid)
     local char = LocalPlayer.Character
     if not char then return false, "No character loaded" end
 
-    -- 1. Fetch HumanoidDescription of target player
+    -- 1. Get HumanoidDescription of target
     local ok, desc = pcall(function()
-        return game:GetService("Players"):GetHumanoidDescriptionFromUserId(uid)
+        return Players:GetHumanoidDescriptionFromUserId(uid)
     end)
     if not ok or not desc then
-        return false, "Could not load avatar for ID " .. tostring(uid)
+        return false, "Bad ID: " .. tostring(desc)
     end
 
-    -- 2. Strip ALL decorations from own character
+    -- 2. Build complete avatar model client-side (NOT server restricted)
+    --    This handles skin color, SurfaceAppearance, layered clothes, etc.
+    local model
+    pcall(function()
+        model = Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15)
+    end)
+    if not model then
+        pcall(function()
+            model = Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R6)
+        end)
+    end
+    if not model then return false, "CreateHumanoidModelFromDescription failed" end
+
+    -- 3. Wipe all visual decorations from own character
     for _, v in pairs(char:GetChildren()) do
         if v:IsA("Accessory") or v:IsA("Shirt") or v:IsA("Pants")
            or v:IsA("ShirtGraphic") or v:IsA("BodyColors") then
             pcall(function() v:Destroy() end)
         end
     end
-
-    -- 3. Remove SurfaceAppearance from every body part
-    --    TSB attaches SurfaceAppearance to each part — this completely overrides
-    --    part.Color, which is WHY the avatar was turning white
+    -- Remove SurfaceAppearance and WrapDeformer from own body parts
     for _, v in pairs(char:GetDescendants()) do
-        if v:IsA("SurfaceAppearance") then
+        if v:IsA("SurfaceAppearance") or v:IsA("WrapDeformer") then
             pcall(function() v:Destroy() end)
         end
     end
 
-    -- 4. Build color table (R15 + R6 names)
-    local partColorMap = {
-        Head          = desc.HeadColor,
-        UpperTorso    = desc.TorsoColor,  LowerTorso    = desc.TorsoColor,
-        LeftUpperArm  = desc.LeftArmColor, LeftLowerArm  = desc.LeftArmColor, LeftHand  = desc.LeftArmColor,
-        RightUpperArm = desc.RightArmColor,RightLowerArm = desc.RightArmColor,RightHand = desc.RightArmColor,
-        LeftUpperLeg  = desc.LeftLegColor, LeftLowerLeg  = desc.LeftLegColor, LeftFoot  = desc.LeftLegColor,
-        RightUpperLeg = desc.RightLegColor,RightLowerLeg = desc.RightLegColor,RightFoot = desc.RightLegColor,
-        -- R6 fallbacks
-        Torso         = desc.TorsoColor,
-        ["Left Arm"]  = desc.LeftArmColor, ["Right Arm"] = desc.RightArmColor,
-        ["Left Leg"]  = desc.LeftLegColor,  ["Right Leg"] = desc.RightLegColor,
-    }
-
-    -- 5. Apply colors + lock them via GetPropertyChangedSignal
-    --    (TSB or Roblox engine may try to reset part.Color — this fights back)
-    if avatarColorConn then pcall(function() avatarColorConn:Disconnect() end) end
-    for partName, color in pairs(partColorMap) do
-        pcall(function()
-            local part = char:FindFirstChild(partName)
-            if part and part:IsA("BasePart") then
-                part.Color = color
-                -- re-lock whenever TSB resets it
-                part:GetPropertyChangedSignal("Color"):Connect(function()
-                    pcall(function() part.Color = color end)
-                end)
-            end
-        end)
+    -- 4. Copy body part visuals: Color + SurfaceAppearance + WrapDeformer
+    local colorLock = {}   -- used by Heartbeat to maintain colors
+    for _, modelPart in pairs(model:GetDescendants()) do
+        if modelPart:IsA("BasePart") then
+            pcall(function()
+                local charPart = char:FindFirstChild(modelPart.Name)
+                if charPart and charPart:IsA("BasePart") then
+                    charPart.Color = modelPart.Color
+                    colorLock[charPart] = modelPart.Color
+                    for _, child in pairs(modelPart:GetChildren()) do
+                        if child:IsA("SurfaceAppearance") or child:IsA("WrapDeformer") then
+                            child:Clone().Parent = charPart
+                        end
+                    end
+                end
+            end)
+        end
     end
 
-    -- 6. Fresh BodyColors (engine sync)
-    local bc = Instance.new("BodyColors", char)
-    bc.HeadColor3 = desc.HeadColor; bc.TorsoColor3 = desc.TorsoColor
-    bc.LeftArmColor3 = desc.LeftArmColor; bc.RightArmColor3 = desc.RightArmColor
-    bc.LeftLegColor3 = desc.LeftLegColor; bc.RightLegColor3 = desc.RightLegColor
+    -- 5. Copy BodyColors instance
+    local modelBC = model:FindFirstChildOfClass("BodyColors")
+    if modelBC then modelBC:Clone().Parent = char end
 
-    -- 7. Clothing
-    if desc.Shirt and desc.Shirt > 0 then
-        local s = Instance.new("Shirt", char); s.ShirtTemplate = "rbxassetid://" .. desc.Shirt
-    end
-    if desc.Pants and desc.Pants > 0 then
-        local p = Instance.new("Pants", char); p.PantsTemplate = "rbxassetid://" .. desc.Pants
-    end
-    if desc.GraphicTShirt and desc.GraphicTShirt > 0 then
-        local g = Instance.new("ShirtGraphic", char); g.Graphic = "rbxassetid://" .. desc.GraphicTShirt
+    -- 6. Copy all accessories (rigid hats + layered WrapLayer clothing)
+    for _, v in pairs(model:GetChildren()) do
+        if v:IsA("Accessory") then
+            pcall(function() v:Clone().Parent = char end)
+        end
     end
 
-    -- 8. Face decal
+    -- 7. Copy Shirt / Pants / ShirtGraphic
+    for _, v in pairs(model:GetChildren()) do
+        if v:IsA("Shirt") or v:IsA("Pants") or v:IsA("ShirtGraphic") then
+            pcall(function() v:Clone().Parent = char end)
+        end
+    end
+
+    -- 8. Copy face decal (Head > Decal)
     pcall(function()
-        local head = char:FindFirstChild("Head")
-        if head then
-            local face
-            for _, d in pairs(head:GetChildren()) do
-                if d:IsA("Decal") then face = d; break end
-            end
-            if not face then face = Instance.new("Decal", head); face.Name = "face" end
-            if desc.Face and desc.Face > 0 then
-                face.Texture = "rbxassetid://" .. tostring(desc.Face)
+        local mHead = model:FindFirstChild("Head")
+        local cHead = char:FindFirstChild("Head")
+        if mHead and cHead then
+            for _, d in pairs(mHead:GetChildren()) do
+                if d:IsA("Decal") then
+                    local existing = cHead:FindFirstChildOfClass("Decal")
+                    if existing then existing.Texture = d.Texture
+                    else d:Clone().Parent = cHead end
+                end
             end
         end
     end)
 
-    -- 9. Accessories via InsertService
-    pcall(function()
-        local IS = game:GetService("InsertService")
-        for _, info in ipairs(desc:GetAccessories(true)) do
-            pcall(function()
-                local m = IS:LoadAsset(info.AssetId)
-                for _, c in pairs(m:GetChildren()) do
-                    if c:IsA("Accessory") then c.Parent = char end
-                end
-                m:Destroy()
-            end)
+    model:Destroy()
+
+    -- 9. Heartbeat lock — fights server attempts to reset part colors
+    if avatarColorConn then pcall(function() avatarColorConn:Disconnect() end) end
+    avatarColorConn = RunService.Heartbeat:Connect(function()
+        if not char.Parent then
+            avatarColorConn:Disconnect(); return
+        end
+        for part, col in pairs(colorLock) do
+            if part.Color ~= col then
+                pcall(function() part.Color = col end)
+            end
         end
     end)
 
