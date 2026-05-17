@@ -154,21 +154,21 @@ task.spawn(function()
             end
         end)
 
-        -- Slider fix:
-        -- 1. ClipsDescendants = true on rounded containers → fill stays inside corners
-        -- 2. Detect blue UIStrokes → make thin grey
-        -- 3. Detect blue fill frames → darken + strip gradient
-        local function fixSliders(root)
+        -- GUI post-processor:
+        -- 1. ClipsDescendants = true on rounded containers → nothing bleeds outside corners
+        -- 2. Blue UIStrokes → thin grey
+        -- 3. Blue fill frames → darker flat colour
+        -- 4. TextBox inputs → auto-scale font + clip parent so numbers never overflow
+        local function fixGui(root)
             for _, obj in pairs(root:GetDescendants()) do
                 pcall(function()
-                    -- ── Rounded containers: clip their children ──────────────────
+                    -- ── Rounded frames: always clip ──────────────────────────────
                     if obj:IsA("Frame") and obj:FindFirstChildOfClass("UICorner") then
                         obj.ClipsDescendants = true
-                        -- If it also has UIStroke → it's a slider track border
                         local stroke = obj:FindFirstChildOfClass("UIStroke")
                         if stroke then
                             local c = stroke.Color
-                            if c.B > 0.3 and c.B > c.R then   -- blue border
+                            if c.B > 0.3 and c.B > c.R then
                                 stroke.Thickness = 1
                                 stroke.Color = Color3.fromRGB(60, 60, 68)
                                 local corner = obj:FindFirstChildOfClass("UICorner")
@@ -179,7 +179,7 @@ task.spawn(function()
                             end
                         end
                     end
-                    -- ── Blue fill frames (progress bar inside slider) ────────────
+                    -- ── Blue fill frames ─────────────────────────────────────────
                     if obj:IsA("Frame") and obj.BackgroundTransparency < 0.5 then
                         local c = obj.BackgroundColor3
                         if c.B > 0.3 and c.B > c.R then
@@ -191,14 +191,32 @@ task.spawn(function()
                             if corner then corner.CornerRadius = UDim.new(0, 4) end
                         end
                     end
+                    -- ── TextBox inputs: fix overflow on focus-loss ────────────────
+                    -- When the user types a long ID and clicks away, Rayfield shrinks
+                    -- the box but the text stays full-size and bleeds outside.
+                    -- Fix: clip the parent + auto-scale font down to fit.
+                    if obj:IsA("TextBox") then
+                        -- Clip text to the input box bounds
+                        if obj.Parent and obj.Parent:IsA("Frame") then
+                            obj.Parent.ClipsDescendants = true
+                        end
+                        -- Auto-scale font: shrinks when text is too wide, never grows past 13
+                        if not obj:FindFirstChildOfClass("UITextSizeConstraint") then
+                            local sc = Instance.new("UITextSizeConstraint", obj)
+                            sc.MaxTextSize = 13
+                            sc.MinTextSize = 7
+                        end
+                        obj.TextScaled = true
+                    end
                 end)
             end
         end
         task.wait(1.5)
-        fixSliders(rfGui)
+        fixGui(rfGui)
+        -- Re-run when new elements are added (tab switches, new inputs)
         rfGui.DescendantAdded:Connect(function()
             task.wait(0.1)
-            pcall(fixSliders, rfGui)
+            pcall(fixGui, rfGui)
         end)
     end)
 end)
