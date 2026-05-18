@@ -1363,33 +1363,34 @@ mainTab:CreateToggle({
 mainTab:CreateDivider()
 mainTab:CreateSection("Combat")
 
--- No Stun: purely client-side — every frame force humanoid out of any stun state
-local NoStunConn  = nil
-local noStunSpeed = 16
+-- No Stun: lock speed at enable-time value, force every frame — mirrors Speed Boost approach
+local NoStunConn      = nil
+local noStunLockedSpd = 16  -- captured once when toggle is turned on
 
 mainTab:CreateToggle({
     Name="No Stun", CurrentValue=false, Flag="NoStun",
     Callback=function(v)
         if v then
+            -- Capture current walkspeed as the "clean" baseline
+            local char0 = LocalPlayer.Character
+            local hum0  = char0 and char0:FindFirstChildOfClass("Humanoid")
+            noStunLockedSpd = (hum0 and hum0.WalkSpeed > 2) and hum0.WalkSpeed or 16
+
             NoStunConn = RunService.Heartbeat:Connect(function()
                 local char = LocalPlayer.Character
                 if not char then return end
                 local hum = char:FindFirstChildOfClass("Humanoid")
                 if not hum then return end
                 pcall(function()
-                    -- PlatformStand = main stun method in TSB (server sets true → we force false)
+                    -- Always force WalkSpeed — never read back from hum (stun can corrupt it)
+                    hum.WalkSpeed = noStunLockedSpd
+                    -- PlatformStand = true is the main TSB stun mechanism
                     if hum.PlatformStand then hum.PlatformStand = false end
-                    -- Restore WalkSpeed if server zeroed/slowed it
-                    if hum.WalkSpeed > 2 then
-                        noStunSpeed = hum.WalkSpeed
-                    else
-                        hum.WalkSpeed = noStunSpeed
-                    end
-                    -- Disable all stun-related humanoid states (purely client properties)
+                    -- Block stun states
                     hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
                     hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll,     false)
                     hum:SetStateEnabled(Enum.HumanoidStateType.GettingUp,   false)
-                    -- Keep humanoid in Running state (prevents stuck/locked state)
+                    -- Force out of any locked state
                     local st = hum:GetState()
                     if st == Enum.HumanoidStateType.FallingDown
                     or st == Enum.HumanoidStateType.Ragdoll
@@ -1400,11 +1401,13 @@ mainTab:CreateToggle({
             end)
         else
             if NoStunConn then NoStunConn:Disconnect(); NoStunConn = nil end
-            if humanoid then
+            local char = LocalPlayer.Character
+            local hum  = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then
                 pcall(function()
-                    humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
-                    humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll,     true)
-                    humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp,   true)
+                    hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+                    hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll,     true)
+                    hum:SetStateEnabled(Enum.HumanoidStateType.GettingUp,   true)
                 end)
             end
         end
