@@ -109,6 +109,22 @@ local function MakeBasicHubLib()
     })
     bgGrad.Rotation = 135
 
+    -- Background image (cosmic theme - loads from external URL via getcustomasset)
+    local bgImg = Instance.new("ImageLabel", MainFrame)
+    bgImg.Size                   = UDim2.new(1, 0, 1, 0)
+    bgImg.BackgroundTransparency = 1
+    bgImg.ScaleType              = Enum.ScaleType.Crop
+    bgImg.ImageTransparency      = 0.18
+    bgImg.ZIndex                 = 1
+    bgImg.Image                  = ""
+    task.spawn(function()
+        pcall(function()
+            local data = game:HttpGet("https://i.ytimg.com/vi/_V-QqTmL2gA/maxresdefault.jpg")
+            writefile("bh_bg.jpg", data)
+            bgImg.Image = getcustomasset("bh_bg.jpg")
+        end)
+    end)
+
     -- Rainbow border
     local borderStroke = Instance.new("UIStroke", MainFrame)
     borderStroke.Thickness       = 2
@@ -194,36 +210,40 @@ local function MakeBasicHubLib()
         end
     end)
 
-    -- Bottom drag handle bar
-    local BottomBar = Instance.new("Frame", MainFrame)
+    -- Bottom drag handle bar (full-width, reliable drag via GetMouseLocation)
+    local BottomBar = Instance.new("TextButton", MainFrame)
     BottomBar.Name             = "BottomDragBar"
-    BottomBar.Size             = UDim2.new(0, 60, 0, 6)
-    BottomBar.Position         = UDim2.new(0.5, -30, 1, -9)
-    BottomBar.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
-    BottomBar.BackgroundTransparency = 0.55
+    BottomBar.Size             = UDim2.new(1, 0, 0, 18)
+    BottomBar.Position         = UDim2.new(0, 0, 1, -18)
+    BottomBar.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    BottomBar.BackgroundTransparency = 0.82
     BottomBar.BorderSizePixel  = 0
+    BottomBar.Text             = ""
+    BottomBar.AutoButtonColor  = false
     BottomBar.ZIndex           = 8
-    Instance.new("UICorner", BottomBar).CornerRadius = UDim.new(1, 0)
+    Instance.new("UICorner", BottomBar).CornerRadius = UDim.new(0, 8)
 
-    -- Make it interactive as a drag zone
-    local bbBtn = Instance.new("TextButton", BottomBar)
-    bbBtn.Size                   = UDim2.new(3, 0, 3, 0)
-    bbBtn.Position               = UDim2.new(-1, 0, -1, 0)
-    bbBtn.BackgroundTransparency = 1
-    bbBtn.Text                   = ""
-    bbBtn.ZIndex                 = 9
+    -- Cyan grip pill in center
+    local gripPill = Instance.new("Frame", BottomBar)
+    gripPill.Size             = UDim2.new(0, 48, 0, 4)
+    gripPill.Position         = UDim2.new(0.5, -24, 0.5, -2)
+    gripPill.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
+    gripPill.BackgroundTransparency = 0.25
+    gripPill.BorderSizePixel  = 0
+    gripPill.ZIndex           = 9
+    Instance.new("UICorner", gripPill).CornerRadius = UDim.new(1, 0)
 
+    -- Drag using GetMouseLocation for reliable Vector2 tracking
     local bdragging, bdragStart, bdragPos = false, nil, nil
-    bbBtn.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            bdragging  = true
-            bdragStart = inp.Position
-            bdragPos   = MainFrame.Position
-        end
+    BottomBar.MouseButton1Down:Connect(function()
+        bdragging  = true
+        bdragStart = UserInputService:GetMouseLocation()
+        bdragPos   = MainFrame.Position
     end)
     UserInputService.InputChanged:Connect(function(inp)
         if bdragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = inp.Position - bdragStart
+            local cur   = UserInputService:GetMouseLocation()
+            local delta = cur - bdragStart
             MainFrame.Position = UDim2.new(
                 bdragPos.X.Scale, bdragPos.X.Offset + delta.X,
                 bdragPos.Y.Scale, bdragPos.Y.Offset + delta.Y
@@ -1393,98 +1413,35 @@ mainTab:CreateToggle({
 
 mainTab:CreateDivider()
 mainTab:CreateSection("Wall Combo")
-mainTab:CreateLabel("Press Q to trigger wall combo: auto-teleport to wall, fire M1s + dash via server.")
+mainTab:CreateLabel("Press button to load Wall Combo script (auto-detect walls, auto-combo).")
 
-local wallComboEnabled = false
-mainTab:CreateToggle({
-    Name         = "Wall Combo Anywhere",
-    CurrentValue = false,
-    Flag         = "WallComboAnywhere",
-    Callback     = function(v) wallComboEnabled = v end,
-})
-
-do
-    local qCooldown = false
-
-    -- Raycast in 4 horizontal directions to find the nearest real wall
-    local function findNearestWall(hrp)
-        local origin = hrp.Position
-        local look   = hrp.CFrame.LookVector
-        local right  = hrp.CFrame.RightVector
-        local dirs   = { look, -look, right, -right }
-        local rcParams = RaycastParams.new()
-        rcParams.FilterType                 = Enum.RaycastFilterType.Exclude
-        rcParams.FilterDescendantsInstances = { LocalPlayer.Character }
-        local bestPos, bestDist, bestNormal
-        for _, dir in ipairs(dirs) do
-            local result = workspace:Raycast(origin, dir * 22, rcParams)
-            if result then
-                local d = (result.Position - origin).Magnitude
-                if not bestDist or d < bestDist then
-                    bestDist   = d
-                    bestPos    = result.Position
-                    bestNormal = result.Normal
-                end
-            end
+local wallComboLoaded = false
+mainTab:CreateButton({
+    Name = "Load Wall Combo",
+    Callback = function()
+        if wallComboLoaded then
+            Rayfield:Notify({ Title="Wall Combo", Content="Already loaded!", Duration=2, Image=4483362458 })
+            return
         end
-        return bestPos, bestDist, bestNormal
-    end
-
-    UserInputService.InputBegan:Connect(function(input, gp)
-        if gp or not wallComboEnabled then return end
-
-        if input.KeyCode == Enum.KeyCode.Q and not qCooldown then
-            local char = LocalPlayer.Character
-            if not char then return end
-            local hrp  = char:FindFirstChild("HumanoidRootPart")
-            local comm = char:FindFirstChild("Communicate")
-            if not hrp or not comm then return end
-
-            qCooldown = true
-
-            -- Find nearest wall and teleport to 2.5 studs from it
-            local wallPos, wallDist, wallNormal = findNearestWall(hrp)
-
-            if wallPos and wallDist and wallDist > 4 then
-                local targetPos = wallPos + wallNormal * 2.5
-                hrp.CFrame = CFrame.new(
-                    Vector3.new(targetPos.X, hrp.Position.Y, targetPos.Z),
-                    Vector3.new(wallPos.X,   hrp.Position.Y, wallPos.Z)
+        wallComboLoaded = true
+        task.spawn(function()
+            pcall(function()
+                local src = game:HttpGet(
+                    "https://rawscripts.net/raw/The-Strongest-Battlegrounds-KEYLESS-TSB-Wall-Combo-Anywhere-and-Auto-Wall-Combo-98317"
                 )
-                task.wait(0.05)
-            elseif not wallPos then
-                -- No wall found: create invisible wall behind player
-                local wallPart = Instance.new("Part")
-                wallPart.Anchored     = true
-                wallPart.CanCollide   = true
-                wallPart.Transparency = 1
-                wallPart.Size         = Vector3.new(14, 28, 1)
-                wallPart.CFrame       = hrp.CFrame * CFrame.new(0, 0, -3)
-                wallPart.Parent       = workspace
-                task.delay(1.0, function() pcall(function() wallPart:Destroy() end) end)
-                task.wait(0.05)
-            end
-
-            -- Fire 4 M1 clicks via Communicate (visible to server/all)
-            pcall(function()
-                for _ = 1, 4 do
-                    comm:FireServer({ Goal = "LeftClick",        Mobile = true })
-                    task.wait(0.07)
-                    comm:FireServer({ Goal = "LeftClickRelease", Mobile = true })
-                    task.wait(0.07)
-                end
+                -- Silence all StarterGui SetCore notifications
+                src = src:gsub(
+                    'game:GetService%("StarterGui"%)',
+                    'setmetatable({},{__index=function()return function()end end})'
+                )
+                src = src:gsub('StarterGui:SetCore%b()', '')
+                -- Silence prints
+                src = src:gsub('print%b()', '')
+                loadstring(src)()
             end)
-
-            -- Fire dash
-            task.wait(0.05)
-            pcall(function()
-                comm:FireServer({ Dash = Enum.KeyCode.W, Key = Enum.KeyCode.Q, Goal = "KeyPress" })
-            end)
-
-            task.delay(1.0, function() qCooldown = false end)
-        end
-    end)
-end
+        end)
+    end,
+})
 
 -------------------------------------------------------------------------------
 -- ═══ TAB: FLING ═══
@@ -1698,9 +1655,9 @@ movesetTab:CreateDivider()
 movesetTab:CreateLabel("Movesets update soon.")
 
 -------------------------------------------------------------------------------
--- ═══ TAB: AUTO FARM ═══
+-- ═══ TAB: COMBAT ═══
 -------------------------------------------------------------------------------
-local autoFarmTab = Window:CreateTab("🌾 AutoFarm", "star")
+local autoFarmTab = Window:CreateTab("⚔ Combat", "zap")
 
 autoFarmTab:CreateSection("AutoReset")
 autoFarmTab:CreateLabel("Resets on taking any damage (auto-farm respawn loop).")
@@ -1742,54 +1699,168 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     end
 end)
 
+-- ── TP to Player (player picker popup) ────────────────────────────────────────
 autoFarmTab:CreateDivider()
-autoFarmTab:CreateSection("TP to Player")
-autoFarmTab:CreateLabel("Teleport to any player by User ID.")
+autoFarmTab:CreateSection("Teleport to Player")
+autoFarmTab:CreateLabel("Opens a list of all players on the server. Click a name to teleport.")
 
-local tpTargetUserId = ""
-autoFarmTab:CreateInput({
-    Name                     = "Target User ID",
-    PlaceholderText          = "e.g. 1234567890",
-    Flag                     = "AutoFarmTP_UID",
-    RemoveTextAfterFocusLost = false,
-    Callback                 = function(v) tpTargetUserId = v end,
-})
+-- Player picker popup (separate ScreenGui so it floats above the main window)
+local pickerGui = Instance.new("ScreenGui")
+pickerGui.Name           = "BH_PlayerPicker"
+pickerGui.ResetOnSpawn   = false
+pickerGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+pcall(function() pickerGui.Parent = game:GetService("CoreGui") end)
+if not pickerGui.Parent then
+    pickerGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local pickerFrame = Instance.new("Frame", pickerGui)
+pickerFrame.Name             = "Picker"
+pickerFrame.Size             = UDim2.new(0, 200, 0, 240)
+pickerFrame.Position         = UDim2.new(0.5, -100, 0.5, -120)
+pickerFrame.BackgroundColor3 = Color3.fromRGB(10, 12, 28)
+pickerFrame.BorderSizePixel  = 0
+pickerFrame.Visible          = false
+pickerFrame.Active           = true
+Instance.new("UICorner", pickerFrame).CornerRadius = UDim.new(0, 8)
+local pkStroke = Instance.new("UIStroke", pickerFrame)
+pkStroke.Color     = Color3.fromRGB(0, 200, 255)
+pkStroke.Thickness = 1
+
+-- Drag for picker
+local pkDrag, pkDragStart, pkDragPos = false, nil, nil
+local pkTitleBar = Instance.new("TextLabel", pickerFrame)
+pkTitleBar.Size               = UDim2.new(1, -30, 0, 28)
+pkTitleBar.BackgroundTransparency = 1
+pkTitleBar.Text               = "Select Player"
+pkTitleBar.TextColor3         = Color3.fromRGB(0, 200, 255)
+pkTitleBar.Font               = Enum.Font.GothamBold
+pkTitleBar.TextSize           = 13
+pkTitleBar.TextXAlignment     = Enum.TextXAlignment.Left
+pkTitleBar.Position           = UDim2.new(0, 8, 0, 0)
+
+local pkClose = Instance.new("TextButton", pickerFrame)
+pkClose.Size             = UDim2.new(0, 22, 0, 22)
+pkClose.Position         = UDim2.new(1, -26, 0, 3)
+pkClose.BackgroundColor3 = Color3.fromRGB(190, 40, 40)
+pkClose.Text             = "✕"
+pkClose.TextColor3       = Color3.fromRGB(255, 255, 255)
+pkClose.Font             = Enum.Font.GothamBold
+pkClose.TextSize         = 11
+Instance.new("UICorner", pkClose).CornerRadius = UDim.new(0, 4)
+pkClose.MouseButton1Click:Connect(function() pickerFrame.Visible = false end)
+
+-- Picker drag
+pickerFrame.InputBegan:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+        pkDrag      = true
+        pkDragStart = UserInputService:GetMouseLocation()
+        pkDragPos   = pickerFrame.Position
+    end
+end)
+UserInputService.InputChanged:Connect(function(inp)
+    if pkDrag and inp.UserInputType == Enum.UserInputType.MouseMovement then
+        local cur   = UserInputService:GetMouseLocation()
+        local delta = cur - pkDragStart
+        pickerFrame.Position = UDim2.new(
+            pkDragPos.X.Scale, pkDragPos.X.Offset + delta.X,
+            pkDragPos.Y.Scale, pkDragPos.Y.Offset + delta.Y
+        )
+    end
+end)
+UserInputService.InputEnded:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 then pkDrag = false end
+end)
+
+-- Divider line under title
+local pkLine = Instance.new("Frame", pickerFrame)
+pkLine.Size             = UDim2.new(1, -8, 0, 1)
+pkLine.Position         = UDim2.new(0, 4, 0, 28)
+pkLine.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
+pkLine.BackgroundTransparency = 0.6
+pkLine.BorderSizePixel  = 0
+
+-- Scrollable player list
+local pkScroll = Instance.new("ScrollingFrame", pickerFrame)
+pkScroll.Size                   = UDim2.new(1, -8, 1, -36)
+pkScroll.Position               = UDim2.new(0, 4, 0, 32)
+pkScroll.BackgroundTransparency = 1
+pkScroll.BorderSizePixel        = 0
+pkScroll.ScrollBarThickness     = 3
+pkScroll.ScrollBarImageColor3   = Color3.fromRGB(0, 200, 255)
+pkScroll.CanvasSize             = UDim2.new(0, 0, 0, 0)
+local pkLayout = Instance.new("UIListLayout", pkScroll)
+pkLayout.Padding   = UDim.new(0, 3)
+pkLayout.SortOrder = Enum.SortOrder.LayoutOrder
+pkLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    pkScroll.CanvasSize = UDim2.new(0, 0, 0, pkLayout.AbsoluteContentSize.Y + 6)
+end)
+
+local function openPlayerPicker()
+    -- Rebuild list fresh each time
+    for _, c in ipairs(pkScroll:GetChildren()) do
+        if c:IsA("TextButton") then c:Destroy() end
+    end
+    local order = 0
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            order = order + 1
+            local pb = Instance.new("TextButton", pkScroll)
+            pb.Size             = UDim2.new(1, 0, 0, 30)
+            pb.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
+            pb.BorderSizePixel  = 0
+            pb.Text             = plr.Name
+            pb.TextColor3       = Color3.fromRGB(215, 230, 255)
+            pb.Font             = Enum.Font.Gotham
+            pb.TextSize         = 12
+            pb.LayoutOrder      = order
+            Instance.new("UICorner", pb).CornerRadius = UDim.new(0, 5)
+            local pbStroke = Instance.new("UIStroke", pb)
+            pbStroke.Color     = Color3.fromRGB(30, 40, 80)
+            pbStroke.Thickness = 1
+            pb.MouseEnter:Connect(function()
+                pb.BackgroundColor3 = Color3.fromRGB(0, 50, 90)
+                pbStroke.Color      = Color3.fromRGB(0, 200, 255)
+            end)
+            pb.MouseLeave:Connect(function()
+                pb.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
+                pbStroke.Color      = Color3.fromRGB(30, 40, 80)
+            end)
+            local capturedPlr = plr
+            pb.MouseButton1Click:Connect(function()
+                pickerFrame.Visible = false
+                local myHRP = humanoidRootPart
+                if not myHRP then
+                    Rayfield:Notify({ Title="Combat", Content="No character!", Duration=3, Image=4483362458 })
+                    return
+                end
+                local tChar = capturedPlr.Character
+                local tHRP  = tChar and tChar:FindFirstChild("HumanoidRootPart")
+                if not tHRP then
+                    Rayfield:Notify({ Title="Combat", Content=capturedPlr.Name .. " has no character!", Duration=3, Image=4483362458 })
+                    return
+                end
+                myHRP.CFrame = tHRP.CFrame + Vector3.new(0, 3, 0)
+                Rayfield:Notify({ Title="Combat", Content="Teleported to " .. capturedPlr.Name, Duration=3, Image=4483362458 })
+            end)
+        end
+    end
+    if order == 0 then
+        local nob = Instance.new("TextLabel", pkScroll)
+        nob.Size = UDim2.new(1, 0, 0, 30)
+        nob.BackgroundTransparency = 1
+        nob.Text = "No other players"
+        nob.TextColor3 = Color3.fromRGB(130, 150, 190)
+        nob.Font = Enum.Font.Gotham
+        nob.TextSize = 12
+        nob.LayoutOrder = 1
+    end
+    pickerFrame.Visible = true
+end
 
 autoFarmTab:CreateButton({
-    Name = "Teleport to Player",
-    Callback = function()
-        local uid = tonumber(tpTargetUserId)
-        if not uid then
-            Rayfield:Notify({ Title="AutoFarm", Content="Invalid User ID!", Duration=3, Image=4483362458 })
-            return
-        end
-        local myHRP = humanoidRootPart
-        if not myHRP then
-            Rayfield:Notify({ Title="AutoFarm", Content="No character!", Duration=3, Image=4483362458 })
-            return
-        end
-        local targetPlayer = nil
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr.UserId == uid then targetPlayer = plr; break end
-        end
-        if not targetPlayer then
-            Rayfield:Notify({ Title="AutoFarm", Content="Player not found in server!", Duration=3, Image=4483362458 })
-            return
-        end
-        local tChar = targetPlayer.Character
-        local tHRP  = tChar and tChar:FindFirstChild("HumanoidRootPart")
-        if not tHRP then
-            Rayfield:Notify({ Title="AutoFarm", Content="Target has no character!", Duration=3, Image=4483362458 })
-            return
-        end
-        myHRP.CFrame = tHRP.CFrame + Vector3.new(0, 3, 0)
-        Rayfield:Notify({
-            Title   = "AutoFarm",
-            Content = "Teleported to " .. targetPlayer.Name,
-            Duration = 3,
-            Image   = 4483362458,
-        })
-    end,
+    Name = "Select Player & Teleport",
+    Callback = function() openPlayerPicker() end,
 })
 
 -------------------------------------------------------------------------------
@@ -2286,6 +2357,190 @@ espTab:CreateToggle({
 })
 
 espTab:CreateLabel("DeathCounter: ESP auto-highlights players using Saitama's ultimate in red.")
+
+espTab:CreateDivider()
+espTab:CreateSection("Death Counter ESP")
+espTab:CreateLabel("Separate floating window: shows 💢 when player has Death Counter skill, ☠ after.")
+
+-- ── Death Counter ESP Window ─────────────────────────────────────────────────
+local dcEspGui = Instance.new("ScreenGui")
+dcEspGui.Name           = "BH_DC_ESP"
+dcEspGui.ResetOnSpawn   = false
+dcEspGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+pcall(function() dcEspGui.Parent = game:GetService("CoreGui") end)
+if not dcEspGui.Parent then dcEspGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+local dcFrame = Instance.new("Frame", dcEspGui)
+dcFrame.Size             = UDim2.new(0, 250, 0, 90)
+dcFrame.Position         = UDim2.new(0.5, -125, 0.1, 0)
+dcFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+dcFrame.BorderSizePixel  = 0
+dcFrame.ClipsDescendants = true
+dcFrame.Visible          = false
+Instance.new("UICorner", dcFrame)
+
+local dcTitle = Instance.new("TextLabel", dcFrame)
+dcTitle.Size                   = UDim2.new(1, 0, 0, 28)
+dcTitle.BackgroundTransparency = 1
+dcTitle.Text                   = "ESP Death Counter"
+dcTitle.TextColor3             = Color3.fromRGB(255, 80, 80)
+dcTitle.Font                   = Enum.Font.GothamBold
+dcTitle.TextSize               = 15
+
+local dcToggleBtn = Instance.new("TextButton", dcFrame)
+dcToggleBtn.Size             = UDim2.new(1, -20, 0, 32)
+dcToggleBtn.Position         = UDim2.new(0, 10, 0, 32)
+dcToggleBtn.BackgroundColor3 = Color3.fromRGB(70, 200, 100)
+dcToggleBtn.TextColor3       = Color3.new(1, 1, 1)
+dcToggleBtn.Font             = Enum.Font.GothamSemibold
+dcToggleBtn.TextSize         = 13
+dcToggleBtn.Text             = "DC ESP: ON"
+Instance.new("UICorner", dcToggleBtn)
+
+local dcColBtn = Instance.new("TextButton", dcFrame)
+dcColBtn.Size             = UDim2.new(0, 22, 0, 22)
+dcColBtn.Position         = UDim2.new(1, -26, 0, 3)
+dcColBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+dcColBtn.TextColor3       = Color3.new(1, 1, 1)
+dcColBtn.Font             = Enum.Font.GothamBold
+dcColBtn.TextSize         = 16
+dcColBtn.Text             = "-"
+Instance.new("UICorner", dcColBtn)
+
+-- Collapse / expand
+local dcExpanded = true
+dcColBtn.MouseButton1Click:Connect(function()
+    if dcExpanded then
+        TweenService:Create(dcFrame, TweenInfo.new(0.25), { Size = UDim2.new(0, 250, 0, 28) }):Play()
+        dcColBtn.Text = "+"
+        dcExpanded    = false
+    else
+        TweenService:Create(dcFrame, TweenInfo.new(0.25), { Size = UDim2.new(0, 250, 0, 90) }):Play()
+        dcColBtn.Text = "-"
+        dcExpanded    = true
+    end
+end)
+
+-- DC ESP toggle
+local dcEspOn = true
+dcToggleBtn.MouseButton1Click:Connect(function()
+    dcEspOn = not dcEspOn
+    dcToggleBtn.BackgroundColor3 = dcEspOn and Color3.fromRGB(70, 200, 100) or Color3.fromRGB(100, 100, 100)
+    dcToggleBtn.Text             = dcEspOn and "DC ESP: ON" or "DC ESP: OFF"
+end)
+
+-- Drag
+local dcDrag, dcDragStart, dcDragPos = false, nil, nil
+dcFrame.InputBegan:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+        dcDrag      = true
+        dcDragStart = UserInputService:GetMouseLocation()
+        dcDragPos   = dcFrame.Position
+    end
+end)
+UserInputService.InputChanged:Connect(function(inp)
+    if dcDrag and inp.UserInputType == Enum.UserInputType.MouseMovement then
+        local cur   = UserInputService:GetMouseLocation()
+        local delta = cur - dcDragStart
+        dcFrame.Position = UDim2.new(
+            dcDragPos.X.Scale, dcDragPos.X.Offset + delta.X,
+            dcDragPos.Y.Scale, dcDragPos.Y.Offset + delta.Y
+        )
+    end
+end)
+UserInputService.InputEnded:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 then dcDrag = false end
+end)
+
+-- DC ESP skill detection
+local dcStrongSkills = {
+    ["Omni Directional Punch"] = true, ["Death Counter"] = true,
+    ["Serious Punch"] = true,          ["Table Flip"]    = true,
+}
+local dcWeakSkills = {
+    ["Consecutive Punches"] = true, ["Normal Punch"] = true,
+    ["Shove"] = true, ["Uppercut"] = true,
+}
+local dcState = {}
+
+local function dcCreateBillboard(char, text)
+    if not (char and char:FindFirstChild("Head")) then return end
+    local head = char.Head
+    local bb   = head:FindFirstChild("DC_SkillTag") or Instance.new("BillboardGui")
+    bb.Name        = "DC_SkillTag"
+    bb.Size        = UDim2.new(0, 80, 0, 34)
+    bb.StudsOffset = Vector3.new(0, 3, 0)
+    bb.Adornee     = head
+    bb.AlwaysOnTop = true
+    if not bb.Parent then bb.Parent = head end
+    local lbl = bb:FindFirstChild("TextLabel") or Instance.new("TextLabel", bb)
+    lbl.Size                     = UDim2.new(1, 0, 1, 0)
+    lbl.BackgroundTransparency   = 1
+    lbl.Font                     = Enum.Font.GothamBold
+    lbl.TextScaled               = true
+    lbl.TextColor3               = Color3.new(1, 1, 1)
+    lbl.TextStrokeTransparency   = 0.4
+    lbl.Text                     = text
+end
+
+local function dcRemoveBillboard(char)
+    if char and char:FindFirstChild("Head") then
+        local t = char.Head:FindFirstChild("DC_SkillTag")
+        if t then t:Destroy() end
+    end
+end
+
+local function dcGetSkillType(backpack)
+    for _, tool in ipairs(backpack:GetChildren()) do
+        if dcStrongSkills[tool.Name] then return "strong" end
+        if dcWeakSkills[tool.Name]   then return "weak"   end
+    end
+end
+
+RunService.Heartbeat:Connect(function()
+    if not dcEspOn or not dcFrame.Visible then return end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            local char     = plr.Character
+            local backpack = plr:FindFirstChildOfClass("Backpack")
+            if char and backpack then
+                local skillType = dcGetSkillType(backpack)
+                local lastState = dcState[plr]
+                if not lastState then
+                    dcState[plr] = skillType
+                    if skillType == "strong" then dcCreateBillboard(char, "💢")
+                    else dcRemoveBillboard(char) end
+                else
+                    if skillType == "strong" then
+                        if lastState ~= "strong" then dcCreateBillboard(char, "💢") end
+                        dcState[plr] = "strong"
+                    elseif skillType == "weak" and lastState == "strong" then
+                        dcCreateBillboard(char, "☠")
+                        dcState[plr] = "weak"
+                        task.delay(math.random(8, 9), function()
+                            if dcState[plr] == "weak" then dcRemoveBillboard(char) end
+                        end)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- Player leave: clean up state
+Players.PlayerRemoving:Connect(function(plr)
+    dcState[plr] = nil
+end)
+
+-- Tab button to show/hide DC ESP window
+local dcWindowOpen = false
+espTab:CreateButton({
+    Name = "Toggle DC ESP Window",
+    Callback = function()
+        dcWindowOpen = not dcWindowOpen
+        dcFrame.Visible = dcWindowOpen
+    end,
+})
 
 -------------------------------------------------------------------------------
 -- ═══ TAB: MISC ═══
