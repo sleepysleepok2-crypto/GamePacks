@@ -1398,8 +1398,9 @@ mainTab:CreateToggle({
                     or st == Enum.HumanoidStateType.GettingUp then
                         hum:ChangeState(Enum.HumanoidStateType.Running)
                     end
-                    -- Remove knockback forces (BodyVelocity pushes you back → slows forward movement)
+                    -- Kill knockback: destroy force objects AND zero large horizontal velocity
                     if hrp then
+                        -- Destroy any force/velocity constraints added by TSB
                         local kids = hrp:GetChildren()
                         for i = 1, #kids do
                             local inst = kids[i]
@@ -1408,6 +1409,13 @@ mainTab:CreateToggle({
                             or inst:IsA("BodyPosition") then
                                 inst:Destroy()
                             end
+                        end
+                        -- Zero out horizontal velocity if it's larger than normal walk speed
+                        -- (knockback sets it to 50-100+, walking is ~16 max)
+                        local vel  = hrp.AssemblyLinearVelocity
+                        local hMag = Vector3.new(vel.X, 0, vel.Z).Magnitude
+                        if hMag > 25 then
+                            hrp.AssemblyLinearVelocity = Vector3.new(0, vel.Y, 0)
                         end
                     end
                 end)
