@@ -145,8 +145,7 @@ task.spawn(function()
 
         -- Slider visibility: Rayfield tweens the frame (doesn't set Visible immediately),
         -- so a signal-based approach fires too late.  Heartbeat polling is instant.
-        -- inputFrames: tracks TextBox parent frames (dedup only)
-        local inputFrames = {}
+        local lockedInputs = {}   -- { frame=Frame, size=UDim2 }
 
         local lastVisible = mainFrame.Visible
         RunService.Heartbeat:Connect(function()
@@ -155,6 +154,18 @@ task.spawn(function()
             if v ~= lastVisible then
                 lastVisible = v
                 rfGui.Enabled = v
+            end
+            -- Continuously enforce locked input frame sizes every frame
+            -- (beats TweenService, AutomaticSize, any Rayfield resize)
+            for i = #lockedInputs, 1, -1 do
+                local info = lockedInputs[i]
+                if info.frame.Parent then
+                    if info.frame.Size ~= info.size then
+                        info.frame.Size = info.size
+                    end
+                else
+                    table.remove(lockedInputs, i)
+                end
             end
         end)
 
@@ -196,48 +207,41 @@ task.spawn(function()
                         end
                     end
                     -- ── TextBox inputs ────────────────────────────────────────────
-                    -- Fix: Rayfield tweens the input-holder frame to 0 width on
-                    -- FocusLost.  We lock it at a static 160 px using
-                    -- GetPropertyChangedSignal (fires synchronously → wins against
-                    -- TweenService every frame without a polling loop).
+                    -- Rayfield tweens and/or AutomaticSize-resizes the input holder
+                    -- whenever text changes or focus is lost.  We:
+                    --   1. Disable AutomaticSize on the TextBox and its parent frame
+                    --   2. Capture the real initial size (after a short settle delay)
+                    --   3. Register in lockedInputs so Heartbeat enforces it every frame
                     if obj:IsA("TextBox") then
-                        local f = obj.Parent
-                        if f and f:IsA("Frame") then
-                            f.ClipsDescendants = true
-                            local alreadyTracked = false
-                            for _, tracked in ipairs(inputFrames) do
-                                if tracked == f then alreadyTracked = true; break end
-                            end
-                            if not alreadyTracked then
-                                table.insert(inputFrames, f)
-                                local captured = f
-                                task.delay(0.15, function()
-                                    if not captured.Parent then return end
-                                    -- Freeze width; preserve Rayfield's Y (usually scale=1)
-                                    local locked = UDim2.new(
-                                        0, 160,
-                                        captured.Size.Y.Scale,
-                                        captured.Size.Y.Offset
-                                    )
-                                    captured.Size = locked
-                                    -- Guard prevents re-entrancy when we set Size inside
-                                    -- the signal handler
-                                    local guard = false
-                                    captured:GetPropertyChangedSignal("Size"):Connect(function()
-                                        if guard then return end
-                                        guard = true
-                                        captured.Size = locked
-                                        guard = false
-                                    end)
-                                end)
-                            end
-                        end
+                        obj.AutomaticSize = Enum.AutomaticSize.None
                         if not obj:FindFirstChildOfClass("UITextSizeConstraint") then
                             local sc = Instance.new("UITextSizeConstraint", obj)
                             sc.MaxTextSize = 13
                             sc.MinTextSize = 7
                         end
                         obj.TextScaled = true
+                        local f = obj.Parent
+                        if f and f:IsA("Frame") then
+                            f.ClipsDescendants   = true
+                            f.AutomaticSize      = Enum.AutomaticSize.None
+                            local alreadyTracked = false
+                            for _, info in ipairs(lockedInputs) do
+                                if info.frame == f then alreadyTracked = true; break end
+                            end
+                            if not alreadyTracked then
+                                -- Delay so Rayfield finishes its own initial layout first
+                                task.delay(0.3, function()
+                                    if not f.Parent then return end
+                                    local sz = f.Size
+                                    -- If Rayfield collapsed it before we got here, use 160 px
+                                    if sz.X.Offset < 80 and sz.X.Scale < 0.1 then
+                                        sz = UDim2.new(0, 160, sz.Y.Scale, sz.Y.Offset)
+                                    end
+                                    f.Size = sz
+                                    table.insert(lockedInputs, { frame = f, size = sz })
+                                end)
+                            end
+                        end
                     end
                 end)
             end
@@ -1170,31 +1174,7 @@ local function applyVisual(userId)
     end)
 end
 
--- Restart Avatar: remove ALL visual decorations (no script-protection bypass)
-local function restartAvatar()
-    local char = LocalPlayer.Character
-    if not char then return end
-    for _, c in ipairs(char:GetChildren()) do
-        if c:IsA("Accessory") or c:IsA("Hat") or c:IsA("Shirt") or
-           c:IsA("Pants") or c:IsA("ShirtGraphic") or c:IsA("CharacterMesh") or
-           c:IsA("BodyColors") then
-            pcall(function() c:Destroy() end)
-        end
-    end
-    local head = char:FindFirstChild("Head")
-    if head then
-        for _, d in ipairs(head:GetChildren()) do
-            if d:IsA("Decal") and d.Name:lower() == "face" then
-                pcall(function() d:Destroy() end)
-            end
-        end
-    end
-end
-
 -- ── Avatar tab UI ────────────────────────────────────────────────────────────
-
-avatarTab:CreateSection("⚠ Warning")
-avatarTab:CreateLabel("Before starting avatar changer — press Restart Avatar first.")
 
 avatarTab:CreateSection("Load Avatar by User ID")
 avatarTab:CreateInput({
@@ -1214,14 +1194,6 @@ avatarTab:CreateButton({
             return
         end
         applyVisual(uid)
-    end,
-})
-
-avatarTab:CreateButton({
-    Name = "Restart Avatar",
-    Callback = function()
-        restartAvatar()
-        Rayfield:Notify({ Title="Avatar", Content="All accessories removed.", Duration=3, Image=4483362458 })
     end,
 })
 
