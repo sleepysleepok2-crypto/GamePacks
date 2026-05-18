@@ -1675,48 +1675,7 @@ movesetTab:CreateLabel("Movesets update soon.")
 -------------------------------------------------------------------------------
 local autoFarmTab = Window:CreateTab("⚔ Combat", "zap")
 
-autoFarmTab:CreateSection("AutoReset")
-autoFarmTab:CreateLabel("Resets on taking any damage (auto-farm respawn loop).")
-
-local autoResetEnabled = false
-local autoResetConn    = nil
-
-local function connectAutoReset(char)
-    if autoResetConn then autoResetConn:Disconnect(); autoResetConn = nil end
-    if not autoResetEnabled then return end
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    autoResetConn = hum.HealthChanged:Connect(function(health)
-        if autoResetEnabled and health < hum.MaxHealth then
-            hum.Health = 0
-        end
-    end)
-end
-
-autoFarmTab:CreateToggle({
-    Name         = "AutoReset",
-    CurrentValue = false,
-    Flag         = "AutoReset",
-    Callback     = function(v)
-        autoResetEnabled = v
-        if v then
-            if LocalPlayer.Character then connectAutoReset(LocalPlayer.Character) end
-        else
-            if autoResetConn then autoResetConn:Disconnect(); autoResetConn = nil end
-        end
-    end,
-})
-
--- Reconnect on respawn
-LocalPlayer.CharacterAdded:Connect(function(char)
-    if autoResetEnabled then
-        task.wait(0.5)
-        connectAutoReset(char)
-    end
-end)
-
 -- ── TP to Player (player picker popup) ────────────────────────────────────────
-autoFarmTab:CreateDivider()
 autoFarmTab:CreateSection("Teleport to Player")
 autoFarmTab:CreateLabel("Opens a list of all players on the server. Click a name to teleport.")
 
@@ -2538,18 +2497,15 @@ RunService.Heartbeat:Connect(function()
                 local lastState = dcState[plr]
                 if not lastState then
                     dcState[plr] = skillType
-                    if skillType == "strong" then dcCreateBillboard(char, "💢")
+                    if skillType == "strong" then dcCreateBillboard(char, "DeathCounter")
                     else dcRemoveBillboard(char) end
                 else
                     if skillType == "strong" then
-                        if lastState ~= "strong" then dcCreateBillboard(char, "💢") end
+                        if lastState ~= "strong" then dcCreateBillboard(char, "DeathCounter") end
                         dcState[plr] = "strong"
                     elseif skillType == "weak" and lastState == "strong" then
-                        dcCreateBillboard(char, "☠")
                         dcState[plr] = "weak"
-                        task.delay(math.random(8, 9), function()
-                            if dcState[plr] == "weak" then dcRemoveBillboard(char) end
-                        end)
+                        dcRemoveBillboard(char)
                     end
                 end
             end
