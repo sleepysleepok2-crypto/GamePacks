@@ -54,7 +54,7 @@ LocalPlayer.CharacterAdded:Connect(applyExploits)
 local function MakeBasicHubLib()
     local lib = {}
 
-    -- в”Ђв”Ђ ScreenGui в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    -- ── ScreenGui ─────────────────────────────────────────────────────────────
     local coreGui = game:GetService("CoreGui")
     local guiRoot
     pcall(function()
@@ -74,24 +74,24 @@ local function MakeBasicHubLib()
         guiRoot         = sg
     end
 
-    -- в”Ђв”Ђ Dimensions & colours в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    -- ── Dimensions & colours ──────────────────────────────────────────────────
     local SIDEBAR_W = 148
     local WINDOW_W  = 540
     local WINDOW_H  = 420
     local TOPBAR_H  = 38
 
-    local C_WIN_BG  = Color3.fromRGB(18,  18,  22 )
-    local C_TOP_BG  = Color3.fromRGB(22,  22,  28 )
-    local C_SIDE_BG = Color3.fromRGB(14,  14,  18 )
-    local C_CONT_BG = Color3.fromRGB(20,  20,  26 )
-    local C_ELEM_BG = Color3.fromRGB(28,  28,  34 )
-    local C_TEXT    = Color3.fromRGB(228, 228, 240)
-    local C_SUB     = Color3.fromRGB(150, 150, 168)
-    local C_ACCENT  = Color3.fromRGB(0,   170, 255)
-    local C_TOG_ON  = Color3.fromRGB(0,   200, 100)
-    local C_TOG_OFF = Color3.fromRGB(52,  52,  64 )
+    local C_WIN_BG  = Color3.fromRGB(8,   10,  22 )
+    local C_TOP_BG  = Color3.fromRGB(10,  14,  28 )
+    local C_SIDE_BG = Color3.fromRGB(6,   8,   18 )
+    local C_CONT_BG = Color3.fromRGB(8,   12,  24 )
+    local C_ELEM_BG = Color3.fromRGB(14,  18,  36 )
+    local C_TEXT    = Color3.fromRGB(215, 230, 255)
+    local C_SUB     = Color3.fromRGB(130, 150, 190)
+    local C_ACCENT  = Color3.fromRGB(0,   200, 255)
+    local C_TOG_ON  = Color3.fromRGB(0,   210, 120)
+    local C_TOG_OFF = Color3.fromRGB(25,  32,  60 )
 
-    -- в”Ђв”Ђ Main window в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    -- ── Main window ───────────────────────────────────────────────────────────
     local MainFrame = Instance.new("Frame", guiRoot)
     MainFrame.Name             = "MainWindow"
     MainFrame.Size             = UDim2.new(0, WINDOW_W, 0, WINDOW_H)
@@ -99,6 +99,15 @@ local function MakeBasicHubLib()
     MainFrame.BackgroundColor3 = C_WIN_BG
     MainFrame.BorderSizePixel  = 0
     Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
+
+    -- Cosmic-blue background gradient
+    local bgGrad = Instance.new("UIGradient", MainFrame)
+    bgGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0,   Color3.fromRGB(10, 16, 40)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(5,  8,  22)),
+        ColorSequenceKeypoint.new(1,   Color3.fromRGB(8,  18, 44)),
+    })
+    bgGrad.Rotation = 135
 
     -- Rainbow border
     local borderStroke = Instance.new("UIStroke", MainFrame)
@@ -140,7 +149,7 @@ local function MakeBasicHubLib()
     CloseBtn.Size              = UDim2.new(0, 26, 0, 26)
     CloseBtn.Position          = UDim2.new(1, -32, 0.5, -13)
     CloseBtn.BackgroundColor3  = Color3.fromRGB(190, 40, 40)
-    CloseBtn.Text              = "вњ•"
+    CloseBtn.Text              = "✕"
     CloseBtn.TextColor3        = Color3.fromRGB(255, 255, 255)
     CloseBtn.Font              = Enum.Font.GothamBold
     CloseBtn.TextSize          = 11
@@ -182,6 +191,48 @@ local function MakeBasicHubLib()
         if inp.KeyCode == Enum.KeyCode.K then
             winVisible        = not winVisible
             MainFrame.Visible = winVisible
+        end
+    end)
+
+    -- Bottom drag handle bar
+    local BottomBar = Instance.new("Frame", MainFrame)
+    BottomBar.Name             = "BottomDragBar"
+    BottomBar.Size             = UDim2.new(0, 60, 0, 6)
+    BottomBar.Position         = UDim2.new(0.5, -30, 1, -9)
+    BottomBar.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
+    BottomBar.BackgroundTransparency = 0.55
+    BottomBar.BorderSizePixel  = 0
+    BottomBar.ZIndex           = 8
+    Instance.new("UICorner", BottomBar).CornerRadius = UDim.new(1, 0)
+
+    -- Make it interactive as a drag zone
+    local bbBtn = Instance.new("TextButton", BottomBar)
+    bbBtn.Size                   = UDim2.new(3, 0, 3, 0)
+    bbBtn.Position               = UDim2.new(-1, 0, -1, 0)
+    bbBtn.BackgroundTransparency = 1
+    bbBtn.Text                   = ""
+    bbBtn.ZIndex                 = 9
+
+    local bdragging, bdragStart, bdragPos = false, nil, nil
+    bbBtn.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            bdragging  = true
+            bdragStart = inp.Position
+            bdragPos   = MainFrame.Position
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(inp)
+        if bdragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = inp.Position - bdragStart
+            MainFrame.Position = UDim2.new(
+                bdragPos.X.Scale, bdragPos.X.Offset + delta.X,
+                bdragPos.Y.Scale, bdragPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            bdragging = false
         end
     end)
 
@@ -236,7 +287,7 @@ local function MakeBasicHubLib()
     NotifLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
     NotifLayout.SortOrder         = Enum.SortOrder.LayoutOrder
 
-    -- в”Ђв”Ђ Shared helpers в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    -- ── Shared helpers ────────────────────────────────────────────────────────
     local function makeScroll()
         local sf = Instance.new("ScrollingFrame", Content)
         sf.Size                   = UDim2.new(1, -6, 1, -6)
@@ -270,7 +321,7 @@ local function MakeBasicHubLib()
         return f
     end
 
-    -- в”Ђв”Ђ Rayfield-compatible API в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    -- ── Rayfield-compatible API ───────────────────────────────────────────────
     function lib:CreateWindow(opts)
         opts = opts or {}
         TitleLbl.Text = opts.Name or "BasicHub"
@@ -626,7 +677,7 @@ local function MakeBasicHubLib()
         return win
     end -- CreateWindow
 
-    -- в”Ђв”Ђ Notify в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    -- ── Notify ────────────────────────────────────────────────────────────────
     function lib:Notify(opts)
         opts = opts or {}
         local ntitle   = opts.Title    or "Notification"
@@ -694,7 +745,7 @@ local Window = Rayfield:CreateWindow({
 })
 
 -------------------------------------------------------------------------------
--- EMOTEFIX вЂ” auto-run silently (no loading GUI, no notifications)
+-- EMOTEFIX — auto-run silently (no loading GUI, no notifications)
 -------------------------------------------------------------------------------
 task.spawn(function()
     task.wait(3)
@@ -892,7 +943,7 @@ local function CreateFlingGUI()
     TitleLabel.Size              = UDim2.new(1, -40, 1, 0)
     TitleLabel.Position          = UDim2.new(0, 10, 0, 0)
     TitleLabel.BackgroundTransparency = 1
-    TitleLabel.Text              = "вљ” BasicHub | Fling"
+    TitleLabel.Text              = "⚔ BasicHub | Fling"
     TitleLabel.TextColor3        = Color3.fromRGB(220, 50, 50)
     TitleLabel.Font              = Enum.Font.GothamBold
     TitleLabel.TextSize          = 15
@@ -902,7 +953,7 @@ local function CreateFlingGUI()
     CloseBtn.Size              = UDim2.new(0, 28, 0, 28)
     CloseBtn.Position          = UDim2.new(1, -32, 0, 4)
     CloseBtn.BackgroundColor3  = Color3.fromRGB(200, 40, 40)
-    CloseBtn.Text              = "вњ•"
+    CloseBtn.Text              = "✕"
     CloseBtn.TextColor3        = Color3.fromRGB(255,255,255)
     CloseBtn.Font              = Enum.Font.GothamBold
     CloseBtn.TextSize          = 14
@@ -951,7 +1002,7 @@ local function CreateFlingGUI()
     local function UpdateStatus()
         local n = CountSelected()
         if FlingActive then
-            StatusLabel.Text      = "вљ” Flinging " .. n .. " player(s)..."
+            StatusLabel.Text      = "⚔ Flinging " .. n .. " player(s)..."
             StatusLabel.TextColor3 = Color3.fromRGB(255,80,80)
         else
             StatusLabel.Text      = n .. " selected | Press START"
@@ -989,7 +1040,7 @@ local function CreateFlingGUI()
             local Check = Instance.new("TextLabel", CB)
             Check.Size                = UDim2.fromScale(1,1)
             Check.BackgroundTransparency = 1
-            Check.Text               = "вњ“"
+            Check.Text               = "✓"
             Check.TextColor3         = Color3.fromRGB(80, 255, 80)
             Check.Font               = Enum.Font.GothamBold
             Check.TextSize           = 14
@@ -1040,7 +1091,7 @@ local function CreateFlingGUI()
         UpdateStatus()
     end
 
-    -- в”Ђв”Ђ Buttons row в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    -- ── Buttons row ─────────────────────────────────────────────────────────
     local BtnY = 298
 
     local function MakeBtn(text, color, xScale, xOffset, wScale, wOffset)
@@ -1056,14 +1107,14 @@ local function CreateFlingGUI()
         return btn
     end
 
-    local StartBtn    = MakeBtn("в–¶ START",  Color3.fromRGB(0,160,0),   0,10,  0.5,-15)
-    local StopBtn     = MakeBtn("в–  STOP",   Color3.fromRGB(180,0,0),   0.5,5, 0.5,-15)
-    local SelAllBtn   = MakeBtn("вњ” All",    Color3.fromRGB(60,60,60),  0,10,  0.5,-15)
-    local DeselAllBtn = MakeBtn("вњ None",  Color3.fromRGB(60,60,60),  0.5,5, 0.5,-15)
+    local StartBtn    = MakeBtn("▶ START",  Color3.fromRGB(0,160,0),   0,10,  0.5,-15)
+    local StopBtn     = MakeBtn("■ STOP",   Color3.fromRGB(180,0,0),   0.5,5, 0.5,-15)
+    local SelAllBtn   = MakeBtn("✔ All",    Color3.fromRGB(60,60,60),  0,10,  0.5,-15)
+    local DeselAllBtn = MakeBtn("✘ None",  Color3.fromRGB(60,60,60),  0.5,5, 0.5,-15)
     SelAllBtn.Position   = UDim2.new(0,10,0,BtnY+44)
     DeselAllBtn.Position = UDim2.new(0.5,5,0,BtnY+44)
 
-    -- в”Ђв”Ђ Logic в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    -- ── Logic ────────────────────────────────────────────────────────────────
     local function StartFling()
         if FlingActive then return end
         if CountSelected() == 0 then
@@ -1129,7 +1180,7 @@ local function CreateFlingGUI()
         FlingGui = nil
     end)
 
-    -- в”Ђв”Ђ Dynamic player list в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    -- ── Dynamic player list ──────────────────────────────────────────────────
     Players.PlayerAdded:Connect(function(plr)
         if ScreenGui and ScreenGui.Parent then
             BuildPlayerList()
@@ -1147,9 +1198,9 @@ local function CreateFlingGUI()
 end
 
 -------------------------------------------------------------------------------
--- в•ђв•ђв•ђ TAB: MAIN в•ђв•ђв•ђ
+-- ═══ TAB: MAIN ═══
 -------------------------------------------------------------------------------
-local mainTab = Window:CreateTab("вљ”пёЏ Main", "sword")
+local mainTab = Window:CreateTab("⚔️ Main", "sword")
 
 mainTab:CreateSection("Movement")
 
@@ -1157,9 +1208,9 @@ mainTab:CreateToggle({
     Name="Speed Boost", CurrentValue=false, Flag="SpeedBoost",
     Callback=function(v) tpwalking = v end,
 })
--- Speed Multiplier: type value 0вЂ“5  (replaces slider вЂ” no broken min-value look)
+-- Speed Multiplier: type value 0–5  (replaces slider — no broken min-value look)
 mainTab:CreateInput({
-    Name="Speed Multiplier  (0 вЂ“ 5)",
+    Name="Speed Multiplier  (0 – 5)",
     PlaceholderText="Default: 0.1",
     Flag="SpeedInput",
     RemoveTextAfterFocusLost=false,
@@ -1177,9 +1228,9 @@ mainTab:CreateToggle({
         if humanoid then humanoid.UseJumpPower = not v end
     end,
 })
--- Jump Height: type value 7.2вЂ“500
+-- Jump Height: type value 7.2–500
 mainTab:CreateInput({
-    Name="Jump Height  (7.2 вЂ“ 500)",
+    Name="Jump Height  (7.2 – 500)",
     PlaceholderText="Default: 7.2",
     Flag="JumpInput",
     RemoveTextAfterFocusLost=false,
@@ -1191,9 +1242,9 @@ mainTab:CreateInput({
 
 mainTab:CreateDivider()
 
--- Gravity: type value 0вЂ“300  (default 192.6 = normal)
+-- Gravity: type value 0–300  (default 192.6 = normal)
 mainTab:CreateInput({
-    Name="Gravity  (0 вЂ“ 300, default 192.6)",
+    Name="Gravity  (0 – 300, default 192.6)",
     PlaceholderText="Default: 192.6",
     Flag="GravityInput",
     RemoveTextAfterFocusLost=false,
@@ -1203,9 +1254,9 @@ mainTab:CreateInput({
     end,
 })
 
--- FOV: type value 10вЂ“120  (default 70)
+-- FOV: type value 10–120  (default 70)
 mainTab:CreateInput({
-    Name="FOV  (10 вЂ“ 120)",
+    Name="FOV  (10 – 120)",
     PlaceholderText="Default: 70",
     Flag="FOVInput",
     RemoveTextAfterFocusLost=false,
@@ -1226,6 +1277,36 @@ mainTab:CreateToggle({
         pcall(function() workspace:SetAttribute("NoDashCooldown", v) end)
     end,
 })
+
+local noDashEndlagEnabled = false
+mainTab:CreateToggle({
+    Name="No Dash Endlag", CurrentValue=false, Flag="NoDashEndlag",
+    Callback=function(v)
+        noDashEndlagEnabled = v
+    end,
+})
+
+-- No Dash Endlag logic: on Q press, stop long animation tracks after ~0.3s
+UserInputService.InputBegan:Connect(function(inp, gp)
+    if gp or not noDashEndlagEnabled then return end
+    if inp.KeyCode == Enum.KeyCode.Q then
+        task.delay(0.3, function()
+            if not noDashEndlagEnabled then return end
+            local char = LocalPlayer.Character
+            if not char then return end
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if not hum then return end
+            pcall(function()
+                for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
+                    if track.Length and track.Length > 0.45 then
+                        track:Stop(0.08)
+                    end
+                end
+            end)
+        end)
+    end
+end)
+
 mainTab:CreateToggle({
     Name="No Fatigue", CurrentValue=false, Flag="NoFatigue",
     Callback=function(v)
@@ -1290,9 +1371,29 @@ mainTab:CreateToggle({
     end,
 })
 
+local infiniteJumpConn = nil
+mainTab:CreateToggle({
+    Name="Infinite Jump", CurrentValue=false, Flag="InfiniteJump",
+    Callback=function(v)
+        if v then
+            infiniteJumpConn = UserInputService.JumpRequest:Connect(function()
+                local char = LocalPlayer.Character
+                local hum  = char and char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    pcall(function()
+                        hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                    end)
+                end
+            end)
+        else
+            if infiniteJumpConn then infiniteJumpConn:Disconnect(); infiniteJumpConn = nil end
+        end
+    end,
+})
+
 mainTab:CreateDivider()
 mainTab:CreateSection("Wall Combo")
-mainTab:CreateLabel("Enable: 4x M1 + Q triggers wall combo anywhere. Teleports to nearest wall first.")
+mainTab:CreateLabel("Press Q to trigger wall combo: auto-teleport to wall, fire M1s + dash via server.")
 
 local wallComboEnabled = false
 mainTab:CreateToggle({
@@ -1303,9 +1404,6 @@ mainTab:CreateToggle({
 })
 
 do
-    local m1Count   = 0
-    local lastM1    = 0
-    local M1_WINDOW = 2.5
     local qCooldown = false
 
     -- Raycast in 4 horizontal directions to find the nearest real wall
@@ -1335,14 +1433,7 @@ do
     UserInputService.InputBegan:Connect(function(input, gp)
         if gp or not wallComboEnabled then return end
 
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            local now = tick()
-            if now - lastM1 > M1_WINDOW then m1Count = 0 end
-            m1Count = m1Count + 1
-            lastM1  = now
-        end
-
-        if input.KeyCode == Enum.KeyCode.Q and m1Count >= 4 and not qCooldown then
+        if input.KeyCode == Enum.KeyCode.Q and not qCooldown then
             local char = LocalPlayer.Character
             if not char then return end
             local hrp  = char:FindFirstChild("HumanoidRootPart")
@@ -1350,13 +1441,11 @@ do
             if not hrp or not comm then return end
 
             qCooldown = true
-            m1Count   = 0
 
-            -- Try to find a real wall and position player against it
+            -- Find nearest wall and teleport to 2.5 studs from it
             local wallPos, wallDist, wallNormal = findNearestWall(hrp)
 
             if wallPos and wallDist and wallDist > 4 then
-                -- Teleport player 2.5 studs away from wall surface
                 local targetPos = wallPos + wallNormal * 2.5
                 hrp.CFrame = CFrame.new(
                     Vector3.new(targetPos.X, hrp.Position.Y, targetPos.Z),
@@ -1364,7 +1453,7 @@ do
                 )
                 task.wait(0.05)
             elseif not wallPos then
-                -- No wall found: spawn invisible wall directly behind player
+                -- No wall found: create invisible wall behind player
                 local wallPart = Instance.new("Part")
                 wallPart.Anchored     = true
                 wallPart.CanCollide   = true
@@ -1372,28 +1461,40 @@ do
                 wallPart.Size         = Vector3.new(14, 28, 1)
                 wallPart.CFrame       = hrp.CFrame * CFrame.new(0, 0, -3)
                 wallPart.Parent       = workspace
-                task.delay(0.9, function() pcall(function() wallPart:Destroy() end) end)
+                task.delay(1.0, function() pcall(function() wallPart:Destroy() end) end)
                 task.wait(0.05)
             end
 
+            -- Fire 4 M1 clicks via Communicate (visible to server/all)
+            pcall(function()
+                for _ = 1, 4 do
+                    comm:FireServer({ Goal = "LeftClick",        Mobile = true })
+                    task.wait(0.07)
+                    comm:FireServer({ Goal = "LeftClickRelease", Mobile = true })
+                    task.wait(0.07)
+                end
+            end)
+
+            -- Fire dash
+            task.wait(0.05)
             pcall(function()
                 comm:FireServer({ Dash = Enum.KeyCode.W, Key = Enum.KeyCode.Q, Goal = "KeyPress" })
             end)
 
-            task.delay(0.9, function() qCooldown = false end)
+            task.delay(1.0, function() qCooldown = false end)
         end
     end)
 end
 
 -------------------------------------------------------------------------------
--- в•ђв•ђв•ђ TAB: FLING в•ђв•ђв•ђ
+-- ═══ TAB: FLING ═══
 -------------------------------------------------------------------------------
-local flingTab = Window:CreateTab("рџ’Ґ Fling", "zap")
+local flingTab = Window:CreateTab("💥 Fling", "zap")
 
 flingTab:CreateSection("Multi-Target Fling")
 
 flingTab:CreateButton({
-    Name = "вљ” Open Fling GUI",
+    Name = "⚔ Open Fling GUI",
     Callback = function()
         if FlingGui and FlingGui.Parent then
             FlingGui:Destroy()
@@ -1464,13 +1565,13 @@ LocalPlayer.CharacterAdded:Connect(function()
 end)
 
 -------------------------------------------------------------------------------
--- в•ђв•ђв•ђ TAB: MOVESETS в•ђв•ђв•ђ
+-- ═══ TAB: MOVESETS ═══
 -------------------------------------------------------------------------------
-local movesetTab = Window:CreateTab("рџҐЉ Movesets", "activity")
+local movesetTab = Window:CreateTab("🥊 Movesets", "activity")
 
 movesetTab:CreateSection("Jujutsu Kaisen")
 
--- в”Ђв”Ђ GOJO SATORU в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- ── GOJO SATORU ──────────────────────────────────────────────────────────────
 local function runGojoMoveset()
     task.spawn(function()
         local plr  = game.Players.LocalPlayer
@@ -1508,7 +1609,7 @@ local function runGojoMoveset()
             end)
         end)
 
-        -- Animation replacements (trigger anim ID в†’ replacement anim ID, speed, startTime)
+        -- Animation replacements (trigger anim ID → replacement anim ID, speed, startTime)
         local simpleSwaps = {
             { src=10468665991, dst="13073745835",   spd=0.9, st=0,   adjSpd0=0.1 },
             { src=10466974800, dst="13560306510",   spd=3,   st=0,   adjSpd0=4   },
@@ -1593,32 +1694,113 @@ end
 
 movesetTab:CreateButton({ Name = "Gojo Satoru", Callback = runGojoMoveset })
 
--- в”Ђв”Ђ RYOMEN SUKUNA в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
-movesetTab:CreateButton({
-    Name = "Ryomen Sukuna",
+movesetTab:CreateDivider()
+movesetTab:CreateLabel("Movesets update soon.")
+
+-------------------------------------------------------------------------------
+-- ═══ TAB: AUTO FARM ═══
+-------------------------------------------------------------------------------
+local autoFarmTab = Window:CreateTab("🌾 AutoFarm", "star")
+
+autoFarmTab:CreateSection("AutoReset")
+autoFarmTab:CreateLabel("Resets on taking any damage (auto-farm respawn loop).")
+
+local autoResetEnabled = false
+local autoResetConn    = nil
+
+local function connectAutoReset(char)
+    if autoResetConn then autoResetConn:Disconnect(); autoResetConn = nil end
+    if not autoResetEnabled then return end
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    autoResetConn = hum.HealthChanged:Connect(function(health)
+        if autoResetEnabled and health < hum.MaxHealth then
+            hum.Health = 0
+        end
+    end)
+end
+
+autoFarmTab:CreateToggle({
+    Name         = "AutoReset",
+    CurrentValue = false,
+    Flag         = "AutoReset",
+    Callback     = function(v)
+        autoResetEnabled = v
+        if v then
+            if LocalPlayer.Character then connectAutoReset(LocalPlayer.Character) end
+        else
+            if autoResetConn then autoResetConn:Disconnect(); autoResetConn = nil end
+        end
+    end,
+})
+
+-- Reconnect on respawn
+LocalPlayer.CharacterAdded:Connect(function(char)
+    if autoResetEnabled then
+        task.wait(0.5)
+        connectAutoReset(char)
+    end
+end)
+
+autoFarmTab:CreateDivider()
+autoFarmTab:CreateSection("TP to Player")
+autoFarmTab:CreateLabel("Teleport to any player by User ID.")
+
+local tpTargetUserId = ""
+autoFarmTab:CreateInput({
+    Name                     = "Target User ID",
+    PlaceholderText          = "e.g. 1234567890",
+    Flag                     = "AutoFarmTP_UID",
+    RemoveTextAfterFocusLost = false,
+    Callback                 = function(v) tpTargetUserId = v end,
+})
+
+autoFarmTab:CreateButton({
+    Name = "Teleport to Player",
     Callback = function()
-        task.spawn(function()
-            local ok, err = pcall(function()
-                loadstring(game:HttpGet("https://pastes.io/raw/O0Rpknka"))()
-            end)
-            Rayfield:Notify({
-                Title   = "Moveset",
-                Content = ok and "Sukuna loaded!" or ("Error: " .. tostring(err)),
-                Duration = ok and 3 or 6, Image = 4483362458,
-            })
-        end)
+        local uid = tonumber(tpTargetUserId)
+        if not uid then
+            Rayfield:Notify({ Title="AutoFarm", Content="Invalid User ID!", Duration=3, Image=4483362458 })
+            return
+        end
+        local myHRP = humanoidRootPart
+        if not myHRP then
+            Rayfield:Notify({ Title="AutoFarm", Content="No character!", Duration=3, Image=4483362458 })
+            return
+        end
+        local targetPlayer = nil
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr.UserId == uid then targetPlayer = plr; break end
+        end
+        if not targetPlayer then
+            Rayfield:Notify({ Title="AutoFarm", Content="Player not found in server!", Duration=3, Image=4483362458 })
+            return
+        end
+        local tChar = targetPlayer.Character
+        local tHRP  = tChar and tChar:FindFirstChild("HumanoidRootPart")
+        if not tHRP then
+            Rayfield:Notify({ Title="AutoFarm", Content="Target has no character!", Duration=3, Image=4483362458 })
+            return
+        end
+        myHRP.CFrame = tHRP.CFrame + Vector3.new(0, 3, 0)
+        Rayfield:Notify({
+            Title   = "AutoFarm",
+            Content = "Teleported to " .. targetPlayer.Name,
+            Duration = 3,
+            Image   = 4483362458,
+        })
     end,
 })
 
 -------------------------------------------------------------------------------
--- в•ђв•ђв•ђ TAB: AVATAR LOADER в•ђв•ђв•ђ
+-- ═══ TAB: AVATAR LOADER ═══
 -------------------------------------------------------------------------------
-local avatarTab = Window:CreateTab("рџ‘¤ Avatar", "user")
+local avatarTab = Window:CreateTab("👤 Avatar", "user")
 
 local avatarUserId   = ""
 local avatarApplying = false
 
--- в”Ђв”Ђ Pure visual helpers (no ApplyDescription / server calls) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- ── Pure visual helpers (no ApplyDescription / server calls) ────────────────
 
 -- Strip all visual decorations from the character (client-side only)
 local function clearVisuals(char)
@@ -1677,7 +1859,7 @@ local function attachAccessory(char, accessory)
     accessory.Parent = char
 end
 
--- Apply appearance from any userId вЂ” purely visual, no server side-effects
+-- Apply appearance from any userId — purely visual, no server side-effects
 local function applyVisual(userId)
     if avatarApplying then
         Rayfield:Notify({ Title="Avatar", Content="Already applying, please wait...", Duration=2, Image=4483362458 })
@@ -1728,9 +1910,9 @@ local function applyVisual(userId)
     end)
 end
 
--- в”Ђв”Ђ Avatar tab UI в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- ── Avatar tab UI ────────────────────────────────────────────────────────────
 
-avatarTab:CreateSection("вљ  Warning")
+avatarTab:CreateSection("⚠ Warning")
 avatarTab:CreateLabel("To avoid bugs, remove all accessories from your avatar before applying a skin.")
 
 avatarTab:CreateSection("Load Avatar by User ID")
@@ -1764,9 +1946,9 @@ avatarTab:CreateButton({
 
 
 -------------------------------------------------------------------------------
--- в•ђв•ђв•ђ TAB: TELEPORT в•ђв•ђв•ђ
+-- ═══ TAB: TELEPORT ═══
 -------------------------------------------------------------------------------
-local tpTab = Window:CreateTab("рџЊЌ Teleport", "map-pin")
+local tpTab = Window:CreateTab("🌍 Teleport", "map-pin")
 
 tpTab:CreateSection("Locations")
 
@@ -1784,7 +1966,7 @@ for _, loc in ipairs(Locations) do
                 humanoidRootPart.CFrame = loc.pos
                 Rayfield:Notify({
                     Title   = "Teleport",
-                    Content = "в†’ " .. loc.name,
+                    Content = "→ " .. loc.name,
                     Duration = 2,
                     Image   = 4483362458,
                 })
@@ -1812,9 +1994,9 @@ tpTab:CreateButton({
 })
 
 -------------------------------------------------------------------------------
--- в•ђв•ђв•ђ TAB: AUTO TECH в•ђв•ђв•ђ
+-- ═══ TAB: AUTO TECH ═══
 -------------------------------------------------------------------------------
-local autoTechTab = Window:CreateTab("вљЎ AutoTech", "zap")
+local autoTechTab = Window:CreateTab("⚡ AutoTech", "zap")
 
 -- Shared animation hook helper (re-hooks on respawn)
 local function hookAnimation(animId, callback)
@@ -1834,7 +2016,7 @@ local function hookAnimation(animId, callback)
     LocalPlayer.CharacterAdded:Connect(hookChar)
 end
 
--- в”Ђв”Ђ 1. Flowing Water + Dash в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- ── 1. Flowing Water + Dash ──────────────────────────────────────────────────
 autoTechTab:CreateSection("Combat Techs")
 
 local flowingEnabled = false
@@ -1855,7 +2037,7 @@ hookAnimation("12273188754", function(track, char)
     end)
 end)
 
--- в”Ђв”Ђ 2. Auto Kyoto в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- ── 2. Auto Kyoto ────────────────────────────────────────────────────────────
 local kyotoEnabled = false
 autoTechTab:CreateToggle({
     Name         = "Auto Kyoto",
@@ -1879,7 +2061,7 @@ hookAnimation("12273188754", function(track, char)
     end)
 end)
 
--- в”Ђв”Ђ 3. Sky Upper Dash в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- ── 3. Sky Upper Dash ────────────────────────────────────────────────────────
 local skyEnabled = false
 autoTechTab:CreateToggle({
     Name         = "Sky Upper Dash",
@@ -1903,7 +2085,7 @@ hookAnimation("10503381238", function(track, char)
     end)
 end)
 
--- в”Ђв”Ђ 4. Instant Lethal Dash в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- ── 4. Instant Lethal Dash ───────────────────────────────────────────────────
 local lethalEnabled = false
 autoTechTab:CreateToggle({
     Name         = "Instant Lethal Dash",
@@ -1928,11 +2110,11 @@ hookAnimation("12296113986", function(track, char)
 end)
 
 -------------------------------------------------------------------------------
--- в•ђв•ђв•ђ TAB: ESP в•ђв•ђв•ђ
+-- ═══ TAB: ESP ═══
 -------------------------------------------------------------------------------
-local espTab = Window:CreateTab("рџ‘Ѓ ESP", "eye")
+local espTab = Window:CreateTab("👁 ESP", "eye")
 
--- в”Ђв”Ђ Death Counter detection в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- ── Death Counter detection ──────────────────────────────────────────────────
 -- Saitama's "Death Counter" ultimate in TSB adds identifiable objects to the
 -- character (BoolValues / StringValues / ParticleEmitters).  We scan for them.
 local DC_KEYWORDS = { "death", "counter", "ultimate", "rage", "dc", "saitama" }
@@ -1958,9 +2140,9 @@ local function isInDeathCounter(char)
     return false
 end
 
--- в”Ђв”Ђ ESP state в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- ── ESP state ────────────────────────────────────────────────────────────────
 local espEnabled = false
-local espObjects = {}   -- player в†’ { billboard, label, healthBar, healthFill }
+local espObjects = {}   -- player → { billboard, label, healthBar, healthFill }
 
 local ESP_NORMAL_COLOR = Color3.fromRGB(255, 255, 255)
 local ESP_DC_COLOR     = Color3.fromRGB(255, 50, 50)
@@ -2059,7 +2241,7 @@ RunService.Heartbeat:Connect(function()
 
             -- Death Counter label
             if isInDeathCounter(char) then
-                data.label.Text       = "в  " .. player.Name .. "\n[DEATH COUNTER]"
+                data.label.Text       = "☠ " .. player.Name .. "\n[DEATH COUNTER]"
                 data.label.TextColor3 = ESP_DC_COLOR
             else
                 data.label.Text       = player.Name
@@ -2090,7 +2272,7 @@ Players.PlayerRemoving:Connect(function(plr)
     removeESP(plr)
 end)
 
--- в”Ђв”Ђ ESP UI в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- ── ESP UI ───────────────────────────────────────────────────────────────────
 espTab:CreateSection("Players")
 
 espTab:CreateToggle({
@@ -2106,9 +2288,9 @@ espTab:CreateToggle({
 espTab:CreateLabel("DeathCounter: ESP auto-highlights players using Saitama's ultimate in red.")
 
 -------------------------------------------------------------------------------
--- в•ђв•ђв•ђ TAB: MISC в•ђв•ђв•ђ
+-- ═══ TAB: MISC ═══
 -------------------------------------------------------------------------------
-local miscTab = Window:CreateTab("вљ™пёЏ Misc", "settings")
+local miscTab = Window:CreateTab("⚙️ Misc", "settings")
 
 miscTab:CreateSection("Player")
 miscTab:CreateButton({
@@ -2185,7 +2367,7 @@ miscTab:CreateSection("About")
 miscTab:CreateParagraph({
     Title   = "BasicHub | The Strongest Battlegrounds",
     Content = "UI Library  : Custom (BasicHub)\n"
-           .. "Key System  : Custom (GitHub)\n"
+           .. "Key System  : PlatoBoost\n"
            .. "Game        : The Strongest Battlegrounds\n"
            .. "Press K     : Toggle UI",
 })
@@ -2194,7 +2376,7 @@ miscTab:CreateParagraph({
 -- READY
 -------------------------------------------------------------------------------
 Rayfield:Notify({
-    Title   = "вњ… BasicHub Loaded!",
+    Title   = "✅ BasicHub Loaded!",
     Content = "Welcome, " .. LocalPlayer.Name .. "! Press K to toggle UI.",
     Duration = 5,
     Image   = 4483362458,
