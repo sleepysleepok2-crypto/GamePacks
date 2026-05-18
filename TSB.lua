@@ -145,26 +145,57 @@ task.spawn(function()
 
         -- Slider visibility: Rayfield tweens the frame (doesn't set Visible immediately),
         -- so a signal-based approach fires too late.  Heartbeat polling is instant.
-        local lockedInputs = {}   -- { frame=Frame, size=UDim2 }
+        local lockedInputs    = {}  -- { frame=Frame, size=UDim2 }
+        local trackedTextBoxes = {}  -- all TextBox objects found in rfGui
+
+        -- Register a TextBox for per-frame property enforcement
+        local function registerTB(obj)
+            if not obj:IsA("TextBox") then return end
+            for _, tb in ipairs(trackedTextBoxes) do
+                if tb == obj then return end
+            end
+            table.insert(trackedTextBoxes, obj)
+        end
 
         local lastVisible = mainFrame.Visible
         RunService.Heartbeat:Connect(function()
-            -- Slider / window visibility sync
+            -- ── Visibility sync ────────────────────────────────────────────
             local v = mainFrame.Visible
-            if v ~= lastVisible then
-                lastVisible = v
-                rfGui.Enabled = v
-            end
-            -- Continuously enforce locked input frame sizes every frame
-            -- (beats TweenService, AutomaticSize, any Rayfield resize)
+            if v ~= lastVisible then lastVisible = v; rfGui.Enabled = v end
+
+            -- ── Input holder size lock ─────────────────────────────────────
             for i = #lockedInputs, 1, -1 do
                 local info = lockedInputs[i]
                 if info.frame.Parent then
                     if info.frame.Size ~= info.size then
                         info.frame.Size = info.size
                     end
+                    -- Also re-enforce clip in case Rayfield resets it
+                    info.frame.ClipsDescendants = true
                 else
                     table.remove(lockedInputs, i)
+                end
+            end
+
+            -- ── TextBox overflow prevention (per-frame) ────────────────────
+            -- Rayfield resets TextScaled/TextSize after creation, so we must
+            -- re-apply every frame.  trackedTextBoxes is small (3–6 items).
+            for i = #trackedTextBoxes, 1, -1 do
+                local tb = trackedTextBoxes[i]
+                if tb.Parent then
+                    if tb.TextScaled              then tb.TextScaled  = false          end
+                    if tb.TextSize ~= 12          then tb.TextSize    = 12             end
+                    if tb.TextTruncate ~= Enum.TextTruncate.AtEnd then
+                        tb.TextTruncate = Enum.TextTruncate.AtEnd
+                    end
+                    local p = tb.Parent
+                    if p and not p.ClipsDescendants then p.ClipsDescendants = true end
+                    local gp = p and p.Parent
+                    if gp and gp:IsA("GuiObject") and not gp.ClipsDescendants then
+                        gp.ClipsDescendants = true
+                    end
+                else
+                    table.remove(trackedTextBoxes, i)
                 end
             end
         end)
@@ -207,45 +238,21 @@ task.spawn(function()
                         end
                     end
                     -- ── TextBox inputs ────────────────────────────────────────────
-                    -- Rayfield tweens and/or AutomaticSize-resizes the input holder
-                    -- whenever text changes or focus is lost.  We:
-                    --   1. Disable AutomaticSize on the TextBox and its parent frame
-                    --   2. Capture the real initial size (after a short settle delay)
-                    --   3. Register in lockedInputs so Heartbeat enforces it every frame
+                    -- Register for per-frame Heartbeat enforcement (TextScaled,
+                    -- TextTruncate, ClipsDescendants).  Also lock the holder size.
                     if obj:IsA("TextBox") then
-                        obj.AutomaticSize = Enum.AutomaticSize.None
-                        obj.TextScaled    = false
-                        obj.TextSize      = 12
-                        obj.TextWrapped   = false
-                        obj.TextTruncate  = Enum.TextTruncate.AtEnd
-                        -- Force ClipsDescendants on up to 4 ancestor frames so text
-                        -- can never bleed outside the rounded Rayfield container
-                        do
-                            local cur = obj.Parent
-                            for _ = 1, 4 do
-                                if cur and cur:IsA("GuiObject") then
-                                    cur.ClipsDescendants = true
-                                    if cur:IsA("Frame") then
-                                        cur.AutomaticSize = Enum.AutomaticSize.None
-                                    end
-                                    cur = cur.Parent
-                                else
-                                    break
-                                end
-                            end
-                        end
+                        registerTB(obj)
                         local f = obj.Parent
                         if f and f:IsA("Frame") then
+                            f.AutomaticSize = Enum.AutomaticSize.None
                             local alreadyTracked = false
                             for _, info in ipairs(lockedInputs) do
                                 if info.frame == f then alreadyTracked = true; break end
                             end
                             if not alreadyTracked then
-                                -- Delay so Rayfield finishes its own initial layout first
                                 task.delay(0.3, function()
                                     if not f.Parent then return end
                                     local sz = f.Size
-                                    -- If Rayfield collapsed it before we got here, use 160 px
                                     if sz.X.Offset < 80 and sz.X.Scale < 0.1 then
                                         sz = UDim2.new(0, 160, sz.Y.Scale, sz.Y.Offset)
                                     end
@@ -260,9 +267,14 @@ task.spawn(function()
         end
         task.wait(1.5)
         fixGui(rfGui)
+        -- Also register any TextBoxes found in the initial scan
+        for _, obj in pairs(rfGui:GetDescendants()) do
+            pcall(registerTB, obj)
+        end
         -- Re-run when new elements are added (tab switches, new inputs)
-        rfGui.DescendantAdded:Connect(function()
+        rfGui.DescendantAdded:Connect(function(obj)
             task.wait(0.1)
+            pcall(registerTB, obj)
             pcall(fixGui, rfGui)
         end)
     end)
