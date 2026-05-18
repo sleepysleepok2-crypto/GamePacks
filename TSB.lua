@@ -1343,6 +1343,7 @@ mainTab:CreateToggle({
         pcall(function() workspace:SetAttribute("NoFatigue", v) end)
     end,
 })
+mainTab:CreateLabel("⚠ No Fatigue: Update needed.")
 
 mainTab:CreateDivider()
 mainTab:CreateSection("Emotes")
@@ -1437,6 +1438,7 @@ mainTab:CreateToggle({
         end
     end,
 })
+mainTab:CreateLabel("⚠ Beta: Set speed boost for better work.")
 
 mainTab:CreateDivider()
 mainTab:CreateSection("Wall Combo")
