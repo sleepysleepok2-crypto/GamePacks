@@ -161,24 +161,18 @@ local function MakeBasicHubLib()
         winVisible        = false
     end)
 
-    -- TopBar drag overlay — transparent button captures MouseButton1Down reliably
-    local topDragBtn = Instance.new("TextButton", TopBar)
-    topDragBtn.Size                   = UDim2.new(1, -42, 1, 0)
-    topDragBtn.BackgroundTransparency = 1
-    topDragBtn.Text                   = ""
-    topDragBtn.AutoButtonColor        = false
-    topDragBtn.ZIndex                 = 5
-
+    -- Drag
     local dragging, dragStart, startPos = false, nil, nil
-    topDragBtn.MouseButton1Down:Connect(function()
-        dragging  = true
-        dragStart = UserInputService:GetMouseLocation()
-        startPos  = MainFrame.Position
+    TopBar.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging  = true
+            dragStart = inp.Position
+            startPos  = MainFrame.Position
+        end
     end)
     UserInputService.InputChanged:Connect(function(inp)
         if dragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
-            local cur   = UserInputService:GetMouseLocation()
-            local delta = cur - dragStart
+            local delta = inp.Position - dragStart
             MainFrame.Position = UDim2.new(
                 startPos.X.Scale, startPos.X.Offset + delta.X,
                 startPos.Y.Scale, startPos.Y.Offset + delta.Y
@@ -200,56 +194,49 @@ local function MakeBasicHubLib()
         end
     end)
 
-    -- External drag handle (lives OUTSIDE the main window, floats below it)
-    local ExtDrag = Instance.new("TextButton", guiRoot)
-    ExtDrag.Name             = "BH_MoveHandle"
-    ExtDrag.Size             = UDim2.new(0, 80, 0, 22)
-    ExtDrag.Position         = UDim2.new(0.5, -40, 0.5, WINDOW_H / 2 + 6)
-    ExtDrag.BackgroundColor3 = Color3.fromRGB(0, 170, 220)
-    ExtDrag.BackgroundTransparency = 0.25
-    ExtDrag.BorderSizePixel  = 0
-    ExtDrag.Text             = "⠿  MOVE"
-    ExtDrag.TextColor3       = Color3.fromRGB(255, 255, 255)
-    ExtDrag.Font             = Enum.Font.GothamBold
-    ExtDrag.TextSize         = 11
-    ExtDrag.AutoButtonColor  = false
-    ExtDrag.ZIndex           = 10
-    Instance.new("UICorner", ExtDrag).CornerRadius = UDim.new(0, 6)
+    -- Bottom drag handle bar (full-width, reliable drag via GetMouseLocation)
+    local BottomBar = Instance.new("TextButton", MainFrame)
+    BottomBar.Name             = "BottomDragBar"
+    BottomBar.Size             = UDim2.new(1, 0, 0, 18)
+    BottomBar.Position         = UDim2.new(0, 0, 1, -18)
+    BottomBar.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    BottomBar.BackgroundTransparency = 0.82
+    BottomBar.BorderSizePixel  = 0
+    BottomBar.Text             = ""
+    BottomBar.AutoButtonColor  = false
+    BottomBar.ZIndex           = 8
+    Instance.new("UICorner", BottomBar).CornerRadius = UDim.new(0, 8)
 
-    local edragging, eDragStart, eFramePos, eBtnPos = false, nil, nil, nil
-    ExtDrag.MouseButton1Down:Connect(function()
-        edragging  = true
-        eDragStart = UserInputService:GetMouseLocation()
-        eFramePos  = MainFrame.Position
-        eBtnPos    = ExtDrag.Position
+    -- Cyan grip pill in center
+    local gripPill = Instance.new("Frame", BottomBar)
+    gripPill.Size             = UDim2.new(0, 48, 0, 4)
+    gripPill.Position         = UDim2.new(0.5, -24, 0.5, -2)
+    gripPill.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
+    gripPill.BackgroundTransparency = 0.25
+    gripPill.BorderSizePixel  = 0
+    gripPill.ZIndex           = 9
+    Instance.new("UICorner", gripPill).CornerRadius = UDim.new(1, 0)
+
+    -- Drag using GetMouseLocation for reliable Vector2 tracking
+    local bdragging, bdragStart, bdragPos = false, nil, nil
+    BottomBar.MouseButton1Down:Connect(function()
+        bdragging  = true
+        bdragStart = UserInputService:GetMouseLocation()
+        bdragPos   = MainFrame.Position
     end)
     UserInputService.InputChanged:Connect(function(inp)
-        if edragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
+        if bdragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
             local cur   = UserInputService:GetMouseLocation()
-            local delta = cur - eDragStart
+            local delta = cur - bdragStart
             MainFrame.Position = UDim2.new(
-                eFramePos.X.Scale, eFramePos.X.Offset + delta.X,
-                eFramePos.Y.Scale, eFramePos.Y.Offset + delta.Y
-            )
-            ExtDrag.Position = UDim2.new(
-                eBtnPos.X.Scale, eBtnPos.X.Offset + delta.X,
-                eBtnPos.Y.Scale, eBtnPos.Y.Offset + delta.Y
+                bdragPos.X.Scale, bdragPos.X.Offset + delta.X,
+                bdragPos.Y.Scale, bdragPos.Y.Offset + delta.Y
             )
         end
     end)
     UserInputService.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then edragging = false end
-    end)
-
-    -- Sync ExtDrag visibility with K toggle and Close button
-    CloseBtn.MouseButton1Click:Connect(function()
-        ExtDrag.Visible = false
-    end)
-    -- K toggle fires both connections in order; by the time this runs MainFrame.Visible is already set
-    UserInputService.InputBegan:Connect(function(inp, gp)
-        if gp then return end
-        if inp.KeyCode == Enum.KeyCode.K then
-            ExtDrag.Visible = MainFrame.Visible
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            bdragging = false
         end
     end)
 
@@ -1724,6 +1711,8 @@ local pkStroke = Instance.new("UIStroke", pickerFrame)
 pkStroke.Color     = Color3.fromRGB(0, 200, 255)
 pkStroke.Thickness = 1
 
+-- Drag for picker
+local pkDrag, pkDragStart, pkDragPos = false, nil, nil
 local pkTitleBar = Instance.new("TextLabel", pickerFrame)
 pkTitleBar.Size               = UDim2.new(1, -30, 0, 28)
 pkTitleBar.BackgroundTransparency = 1
@@ -1745,20 +1734,13 @@ pkClose.TextSize         = 11
 Instance.new("UICorner", pkClose).CornerRadius = UDim.new(0, 4)
 pkClose.MouseButton1Click:Connect(function() pickerFrame.Visible = false end)
 
--- Picker drag overlay (transparent button over title area)
-local pkDragBtn = Instance.new("TextButton", pickerFrame)
-pkDragBtn.Size                   = UDim2.new(1, -28, 0, 28)
-pkDragBtn.Position               = UDim2.new(0, 0, 0, 0)
-pkDragBtn.BackgroundTransparency = 1
-pkDragBtn.Text                   = ""
-pkDragBtn.AutoButtonColor        = false
-pkDragBtn.ZIndex                 = 15
-
-local pkDrag, pkDragStart, pkDragPos = false, nil, nil
-pkDragBtn.MouseButton1Down:Connect(function()
-    pkDrag      = true
-    pkDragStart = UserInputService:GetMouseLocation()
-    pkDragPos   = pickerFrame.Position
+-- Picker drag
+pickerFrame.InputBegan:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+        pkDrag      = true
+        pkDragStart = UserInputService:GetMouseLocation()
+        pkDragPos   = pickerFrame.Position
+    end
 end)
 UserInputService.InputChanged:Connect(function(inp)
     if pkDrag and inp.UserInputType == Enum.UserInputType.MouseMovement then
@@ -2431,20 +2413,14 @@ dcToggleBtn.MouseButton1Click:Connect(function()
     dcToggleBtn.Text             = dcEspOn and "DC ESP: ON" or "DC ESP: OFF"
 end)
 
--- Drag overlay — transparent TextButton covers the title area (reliable MouseButton1Down)
-local dcDragBtn = Instance.new("TextButton", dcFrame)
-dcDragBtn.Size                   = UDim2.new(1, -28, 0, 28)
-dcDragBtn.Position               = UDim2.new(0, 0, 0, 0)
-dcDragBtn.BackgroundTransparency = 1
-dcDragBtn.Text                   = ""
-dcDragBtn.AutoButtonColor        = false
-dcDragBtn.ZIndex                 = 15
-
+-- Drag
 local dcDrag, dcDragStart, dcDragPos = false, nil, nil
-dcDragBtn.MouseButton1Down:Connect(function()
-    dcDrag      = true
-    dcDragStart = UserInputService:GetMouseLocation()
-    dcDragPos   = dcFrame.Position
+dcFrame.InputBegan:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+        dcDrag      = true
+        dcDragStart = UserInputService:GetMouseLocation()
+        dcDragPos   = dcFrame.Position
+    end
 end)
 UserInputService.InputChanged:Connect(function(inp)
     if dcDrag and inp.UserInputType == Enum.UserInputType.MouseMovement then
