@@ -1363,74 +1363,77 @@ mainTab:CreateToggle({
 mainTab:CreateDivider()
 mainTab:CreateSection("Combat")
 
--- No Stun: lock speed at enable-time value, force every frame — mirrors Speed Boost approach
-local NoStunConn      = nil
-local noStunLockedSpd = 16  -- captured once when toggle is turned on
+-- No Stun: reactive via GetPropertyChangedSignal — fires the instant TSB changes the value
+local noStunEnabled  = false
+local noStunSpd      = 16
+local noStunConns    = {}
+local noStunCharConn = nil
+
+local function disconnectNoStun()
+    for i = 1, #noStunConns do
+        noStunConns[i]:Disconnect()
+    end
+    noStunConns = {}
+end
+
+local function applyNoStun(char)
+    disconnectNoStun()
+    if not noStunEnabled or not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hum then return end
+
+    -- Set values immediately on connect
+    pcall(function() hum.WalkSpeed     = noStunSpd end)
+    pcall(function() hum.PlatformStand = false      end)
+
+    -- WalkSpeed: the moment TSB changes it → instantly restore
+    noStunConns[#noStunConns + 1] = hum:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+        pcall(function()
+            if hum.WalkSpeed ~= noStunSpd then
+                hum.WalkSpeed = noStunSpd
+            end
+        end)
+    end)
+
+    -- PlatformStand: the moment TSB sets it true → instantly false
+    noStunConns[#noStunConns + 1] = hum:GetPropertyChangedSignal("PlatformStand"):Connect(function()
+        pcall(function()
+            if hum.PlatformStand then hum.PlatformStand = false end
+        end)
+    end)
+
+    -- HumanoidRootPart velocity: the moment a large knockback is applied → zero horizontal
+    if hrp then
+        noStunConns[#noStunConns + 1] = hrp:GetPropertyChangedSignal("AssemblyLinearVelocity"):Connect(function()
+            pcall(function()
+                local vel  = hrp.AssemblyLinearVelocity
+                local hMag = Vector3.new(vel.X, 0, vel.Z).Magnitude
+                if hMag > 25 then
+                    hrp.AssemblyLinearVelocity = Vector3.new(0, vel.Y, 0)
+                end
+            end)
+        end)
+    end
+end
 
 mainTab:CreateToggle({
     Name="No Stun", CurrentValue=false, Flag="NoStun",
     Callback=function(v)
+        noStunEnabled = v
         if v then
-            -- Capture current walkspeed as the "clean" baseline
-            local char0 = LocalPlayer.Character
-            local hum0  = char0 and char0:FindFirstChildOfClass("Humanoid")
-            noStunLockedSpd = (hum0 and hum0.WalkSpeed > 2) and hum0.WalkSpeed or 16
-
-            NoStunConn = RunService.Heartbeat:Connect(function()
-                local char = LocalPlayer.Character
-                if not char then return end
-                local hum = char:FindFirstChildOfClass("Humanoid")
-                if not hum then return end
-                local hrp = char:FindFirstChild("HumanoidRootPart")
-                pcall(function()
-                    -- Always force WalkSpeed
-                    hum.WalkSpeed = noStunLockedSpd
-                    -- PlatformStand = true is the main TSB stun mechanism
-                    if hum.PlatformStand then hum.PlatformStand = false end
-                    -- Block stun states
-                    hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-                    hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll,     false)
-                    hum:SetStateEnabled(Enum.HumanoidStateType.GettingUp,   false)
-                    -- Force out of any locked state
-                    local st = hum:GetState()
-                    if st == Enum.HumanoidStateType.FallingDown
-                    or st == Enum.HumanoidStateType.Ragdoll
-                    or st == Enum.HumanoidStateType.GettingUp then
-                        hum:ChangeState(Enum.HumanoidStateType.Running)
-                    end
-                    -- Kill knockback: destroy force objects AND zero large horizontal velocity
-                    if hrp then
-                        -- Destroy any force/velocity constraints added by TSB
-                        local kids = hrp:GetChildren()
-                        for i = 1, #kids do
-                            local inst = kids[i]
-                            if inst:IsA("BodyVelocity") or inst:IsA("BodyForce")
-                            or inst:IsA("LinearVelocity") or inst:IsA("VectorForce")
-                            or inst:IsA("BodyPosition") then
-                                inst:Destroy()
-                            end
-                        end
-                        -- Zero out horizontal velocity if it's larger than normal walk speed
-                        -- (knockback sets it to 50-100+, walking is ~16 max)
-                        local vel  = hrp.AssemblyLinearVelocity
-                        local hMag = Vector3.new(vel.X, 0, vel.Z).Magnitude
-                        if hMag > 25 then
-                            hrp.AssemblyLinearVelocity = Vector3.new(0, vel.Y, 0)
-                        end
-                    end
-                end)
-            end)
-        else
-            if NoStunConn then NoStunConn:Disconnect(); NoStunConn = nil end
             local char = LocalPlayer.Character
             local hum  = char and char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                pcall(function()
-                    hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
-                    hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll,     true)
-                    hum:SetStateEnabled(Enum.HumanoidStateType.GettingUp,   true)
-                end)
-            end
+            noStunSpd = (hum and hum.WalkSpeed > 2) and hum.WalkSpeed or 16
+            applyNoStun(char)
+            noStunCharConn = LocalPlayer.CharacterAdded:Connect(function(newChar)
+                task.wait(0.5)
+                noStunSpd = 16
+                applyNoStun(newChar)
+            end)
+        else
+            disconnectNoStun()
+            if noStunCharConn then noStunCharConn:Disconnect(); noStunCharConn = nil end
         end
     end,
 })
