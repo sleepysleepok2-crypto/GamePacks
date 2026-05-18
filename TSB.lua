@@ -214,16 +214,28 @@ task.spawn(function()
                     --   3. Register in lockedInputs so Heartbeat enforces it every frame
                     if obj:IsA("TextBox") then
                         obj.AutomaticSize = Enum.AutomaticSize.None
-                        if not obj:FindFirstChildOfClass("UITextSizeConstraint") then
-                            local sc = Instance.new("UITextSizeConstraint", obj)
-                            sc.MaxTextSize = 13
-                            sc.MinTextSize = 7
+                        obj.TextScaled    = false
+                        obj.TextSize      = 12
+                        obj.TextWrapped   = false
+                        obj.TextTruncate  = Enum.TextTruncate.AtEnd
+                        -- Force ClipsDescendants on up to 4 ancestor frames so text
+                        -- can never bleed outside the rounded Rayfield container
+                        do
+                            local cur = obj.Parent
+                            for _ = 1, 4 do
+                                if cur and cur:IsA("GuiObject") then
+                                    cur.ClipsDescendants = true
+                                    if cur:IsA("Frame") then
+                                        cur.AutomaticSize = Enum.AutomaticSize.None
+                                    end
+                                    cur = cur.Parent
+                                else
+                                    break
+                                end
+                            end
                         end
-                        obj.TextScaled = true
                         local f = obj.Parent
                         if f and f:IsA("Frame") then
-                            f.ClipsDescendants   = true
-                            f.AutomaticSize      = Enum.AutomaticSize.None
                             local alreadyTracked = false
                             for _, info in ipairs(lockedInputs) do
                                 if info.frame == f then alreadyTracked = true; break end
@@ -1176,6 +1188,9 @@ end
 
 -- ── Avatar tab UI ────────────────────────────────────────────────────────────
 
+avatarTab:CreateSection("⚠ Warning")
+avatarTab:CreateLabel("To avoid bugs, remove all accessories from your avatar before applying a skin.")
+
 avatarTab:CreateSection("Load Avatar by User ID")
 avatarTab:CreateInput({
     Name                     = "User ID",
@@ -1215,12 +1230,8 @@ tpTab:CreateSection("Locations")
 
 local Locations = {
     { name="Middle (Centre Map)",    pos=CFrame.new(148, 441, 27)       },
-    { name="Atomic Room",            pos=CFrame.new(1079, 155, 23003)   },
     { name="Death Counter Room",     pos=CFrame.new(-92, 29, 20347)     },
-    { name="Baseplate",              pos=CFrame.new(968, 20, 23088)     },
     { name="Mountain 1",             pos=CFrame.new(266, 699, 458)      },
-    { name="Mountain 2",             pos=CFrame.new(551, 630, -265)     },
-    { name="Mountain 3",             pos=CFrame.new(-107, 642, -328)    },
 }
 
 for _, loc in ipairs(Locations) do
@@ -1257,6 +1268,122 @@ tpTab:CreateButton({
         end
     end,
 })
+
+-------------------------------------------------------------------------------
+-- ═══ TAB: AUTO TECH ═══
+-------------------------------------------------------------------------------
+local autoTechTab = Window:CreateTab("⚡ AutoTech", "zap")
+
+-- Shared animation hook helper (re-hooks on respawn)
+local function hookAnimation(animId, callback)
+    local id = tostring(animId):gsub("rbxassetid://", "")
+    local function hookChar(char)
+        local hum = char:FindFirstChildWhichIsA("Humanoid")
+            or char:WaitForChild("Humanoid", 3)
+        if not hum then return end
+        hum.AnimationPlayed:Connect(function(track)
+            local raw = track.Animation and track.Animation.AnimationId or ""
+            if tostring(raw):gsub("rbxassetid://", "") == id then
+                callback(track, char)
+            end
+        end)
+    end
+    if LocalPlayer.Character then hookChar(LocalPlayer.Character) end
+    LocalPlayer.CharacterAdded:Connect(hookChar)
+end
+
+-- ── 1. Flowing Water + Dash ──────────────────────────────────────────────────
+autoTechTab:CreateSection("Combat Techs")
+
+local flowingEnabled = false
+autoTechTab:CreateToggle({
+    Name         = "Flowing Water + Dash",
+    CurrentValue = false,
+    Flag         = "AutoFlowing",
+    Callback     = function(v) flowingEnabled = v end,
+})
+
+hookAnimation("12273188754", function(track, char)
+    if not flowingEnabled then return end
+    local comm = char:FindFirstChild("Communicate")
+    if not comm then return end
+    task.wait(1.57)
+    pcall(function()
+        comm:FireServer({ Dash = Enum.KeyCode.W, Key = Enum.KeyCode.Q, Goal = "KeyPress" })
+    end)
+end)
+
+-- ── 2. Auto Kyoto ────────────────────────────────────────────────────────────
+local kyotoEnabled = false
+autoTechTab:CreateToggle({
+    Name         = "Auto Kyoto",
+    CurrentValue = false,
+    Flag         = "AutoKyoto",
+    Callback     = function(v) kyotoEnabled = v end,
+})
+
+hookAnimation("12273188754", function(track, char)
+    if not kyotoEnabled then return end
+    local comm = char:FindFirstChild("Communicate")
+    if not comm then return end
+    local tool = LocalPlayer.Backpack:FindFirstChild("Lethal Whirlwind Stream")
+        or (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Lethal Whirlwind Stream"))
+    if not tool then return end
+    task.wait(1.49)
+    pcall(function()
+        comm:FireServer({ Tool = tool, Goal = "Console Move" })
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if hrp then hrp.CFrame = hrp.CFrame + hrp.CFrame.LookVector * 16 end
+    end)
+end)
+
+-- ── 3. Sky Upper Dash ────────────────────────────────────────────────────────
+local skyEnabled = false
+autoTechTab:CreateToggle({
+    Name         = "Sky Upper Dash",
+    CurrentValue = false,
+    Flag         = "AutoSkyDash",
+    Callback     = function(v) skyEnabled = v end,
+})
+
+hookAnimation("10503381238", function(track, char)
+    if not skyEnabled then return end
+    local comm = char:FindFirstChild("Communicate")
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not comm or not root then return end
+    task.wait(0.5)
+    pcall(function()
+        root.CFrame = root.CFrame + Vector3.new(0, 5, 0)
+        comm:FireServer({ Dash = Enum.KeyCode.W, Key = Enum.KeyCode.Q, Goal = "KeyPress" })
+        root.Anchored = true
+        task.wait(1)
+        root.Anchored = false
+    end)
+end)
+
+-- ── 4. Instant Lethal Dash ───────────────────────────────────────────────────
+local lethalEnabled = false
+autoTechTab:CreateToggle({
+    Name         = "Instant Lethal Dash",
+    CurrentValue = false,
+    Flag         = "AutoLethalDash",
+    Callback     = function(v) lethalEnabled = v end,
+})
+
+hookAnimation("12296113986", function(track, char)
+    if not lethalEnabled then return end
+    local comm = char:FindFirstChild("Communicate")
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not comm or not root then return end
+    task.wait(1.59)
+    pcall(function()
+        root.CFrame = root.CFrame + Vector3.new(0, 5, 0)
+        comm:FireServer({ Dash = Enum.KeyCode.W, Key = Enum.KeyCode.Q, Goal = "KeyPress" })
+        root.Anchored = true
+        task.wait(1)
+        root.Anchored = false
+    end)
+end)
 
 -------------------------------------------------------------------------------
 -- ═══ TAB: MISC ═══
