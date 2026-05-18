@@ -161,27 +161,40 @@ local function MakeBasicHubLib()
         winVisible        = false
     end)
 
-    -- Drag
-    local dragging, dragStart, startPos = false, nil, nil
-    TopBar.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging  = true
-            dragStart = inp.Position
-            startPos  = MainFrame.Position
+    -- TopBar drag  (Rayfield-style: dragInput tracking + input.Changed end detection)
+    local dragToggle, dragInput, dragStart, dragStartPos = false, nil, nil, nil
+    local function applyDrag(input)
+        local delta = input.Position - dragStart
+        TweenService:Create(MainFrame, TweenInfo.new(0.025), {
+            Position = UDim2.new(
+                dragStartPos.X.Scale, dragStartPos.X.Offset + delta.X,
+                dragStartPos.Y.Scale, dragStartPos.Y.Offset + delta.Y
+            ),
+        }):Play()
+    end
+    TopBar.InputBegan:Connect(function(input)
+        if (input.UserInputType == Enum.UserInputType.MouseButton1 or
+            input.UserInputType == Enum.UserInputType.Touch) and
+            UserInputService:GetFocusedTextBox() == nil then
+            dragToggle   = true
+            dragStart    = input.Position
+            dragStartPos = MainFrame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragToggle = false
+                end
+            end)
         end
     end)
-    UserInputService.InputChanged:Connect(function(inp)
-        if dragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = inp.Position - dragStart
-            MainFrame.Position = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset + delta.X,
-                startPos.Y.Scale, startPos.Y.Offset + delta.Y
-            )
+    TopBar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or
+           input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
         end
     end)
-    UserInputService.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragToggle then
+            applyDrag(input)
         end
     end)
 
@@ -194,49 +207,62 @@ local function MakeBasicHubLib()
         end
     end)
 
-    -- Bottom drag handle bar (full-width, reliable drag via GetMouseLocation)
-    local BottomBar = Instance.new("TextButton", MainFrame)
+    -- Bottom drag handle  (Rayfield-style, Frame so InputBegan propagates cleanly)
+    local BottomBar = Instance.new("Frame", MainFrame)
     BottomBar.Name             = "BottomDragBar"
-    BottomBar.Size             = UDim2.new(1, 0, 0, 18)
-    BottomBar.Position         = UDim2.new(0, 0, 1, -18)
-    BottomBar.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    BottomBar.BackgroundTransparency = 0.82
+    BottomBar.Size             = UDim2.new(0, 90, 0, 18)
+    BottomBar.Position         = UDim2.new(0.5, -45, 1, -22)
+    BottomBar.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
+    BottomBar.BackgroundTransparency = 0.5
     BottomBar.BorderSizePixel  = 0
-    BottomBar.Text             = ""
-    BottomBar.AutoButtonColor  = false
     BottomBar.ZIndex           = 8
-    Instance.new("UICorner", BottomBar).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", BottomBar).CornerRadius = UDim.new(1, 0)
+    -- Grip dots
+    for i = 1, 3 do
+        local dot = Instance.new("Frame", BottomBar)
+        dot.Size             = UDim2.new(0, 4, 0, 4)
+        dot.Position         = UDim2.new(0.5, (i - 2) * 10 - 2, 0.5, -2)
+        dot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        dot.BackgroundTransparency = 0.3
+        dot.BorderSizePixel  = 0
+        dot.ZIndex           = 9
+        Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+    end
 
-    -- Cyan grip pill in center
-    local gripPill = Instance.new("Frame", BottomBar)
-    gripPill.Size             = UDim2.new(0, 48, 0, 4)
-    gripPill.Position         = UDim2.new(0.5, -24, 0.5, -2)
-    gripPill.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
-    gripPill.BackgroundTransparency = 0.25
-    gripPill.BorderSizePixel  = 0
-    gripPill.ZIndex           = 9
-    Instance.new("UICorner", gripPill).CornerRadius = UDim.new(1, 0)
-
-    -- Drag using GetMouseLocation for reliable Vector2 tracking
-    local bdragging, bdragStart, bdragPos = false, nil, nil
-    BottomBar.MouseButton1Down:Connect(function()
-        bdragging  = true
-        bdragStart = UserInputService:GetMouseLocation()
-        bdragPos   = MainFrame.Position
-    end)
-    UserInputService.InputChanged:Connect(function(inp)
-        if bdragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
-            local cur   = UserInputService:GetMouseLocation()
-            local delta = cur - bdragStart
-            MainFrame.Position = UDim2.new(
-                bdragPos.X.Scale, bdragPos.X.Offset + delta.X,
-                bdragPos.Y.Scale, bdragPos.Y.Offset + delta.Y
-            )
+    -- Rayfield-style drag on BottomBar
+    local bToggle, bInput, bStart, bStartPos = false, nil, nil, nil
+    local function applyBDrag(input)
+        local delta = input.Position - bStart
+        TweenService:Create(MainFrame, TweenInfo.new(0.025), {
+            Position = UDim2.new(
+                bStartPos.X.Scale, bStartPos.X.Offset + delta.X,
+                bStartPos.Y.Scale, bStartPos.Y.Offset + delta.Y
+            ),
+        }):Play()
+    end
+    BottomBar.InputBegan:Connect(function(input)
+        if (input.UserInputType == Enum.UserInputType.MouseButton1 or
+            input.UserInputType == Enum.UserInputType.Touch) and
+            UserInputService:GetFocusedTextBox() == nil then
+            bToggle   = true
+            bStart    = input.Position
+            bStartPos = MainFrame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    bToggle = false
+                end
+            end)
         end
     end)
-    UserInputService.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            bdragging = false
+    BottomBar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or
+           input.UserInputType == Enum.UserInputType.Touch then
+            bInput = input
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == bInput and bToggle then
+            applyBDrag(input)
         end
     end)
 
@@ -2413,27 +2439,41 @@ dcToggleBtn.MouseButton1Click:Connect(function()
     dcToggleBtn.Text             = dcEspOn and "DC ESP: ON" or "DC ESP: OFF"
 end)
 
--- Drag
-local dcDrag, dcDragStart, dcDragPos = false, nil, nil
-dcFrame.InputBegan:Connect(function(inp)
-    if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-        dcDrag      = true
-        dcDragStart = UserInputService:GetMouseLocation()
-        dcDragPos   = dcFrame.Position
+-- DC ESP drag (Rayfield-style)
+local dcToggle, dcDragInput, dcDragStart, dcDragStartPos = false, nil, nil, nil
+local function applyDCDrag(input)
+    local delta = input.Position - dcDragStart
+    TweenService:Create(dcFrame, TweenInfo.new(0.025), {
+        Position = UDim2.new(
+            dcDragStartPos.X.Scale, dcDragStartPos.X.Offset + delta.X,
+            dcDragStartPos.Y.Scale, dcDragStartPos.Y.Offset + delta.Y
+        ),
+    }):Play()
+end
+dcFrame.InputBegan:Connect(function(input)
+    if (input.UserInputType == Enum.UserInputType.MouseButton1 or
+        input.UserInputType == Enum.UserInputType.Touch) and
+        UserInputService:GetFocusedTextBox() == nil then
+        dcToggle       = true
+        dcDragStart    = input.Position
+        dcDragStartPos = dcFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dcToggle = false
+            end
+        end)
     end
 end)
-UserInputService.InputChanged:Connect(function(inp)
-    if dcDrag and inp.UserInputType == Enum.UserInputType.MouseMovement then
-        local cur   = UserInputService:GetMouseLocation()
-        local delta = cur - dcDragStart
-        dcFrame.Position = UDim2.new(
-            dcDragPos.X.Scale, dcDragPos.X.Offset + delta.X,
-            dcDragPos.Y.Scale, dcDragPos.Y.Offset + delta.Y
-        )
+dcFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or
+       input.UserInputType == Enum.UserInputType.Touch then
+        dcDragInput = input
     end
 end)
-UserInputService.InputEnded:Connect(function(inp)
-    if inp.UserInputType == Enum.UserInputType.MouseButton1 then dcDrag = false end
+UserInputService.InputChanged:Connect(function(input)
+    if input == dcDragInput and dcToggle then
+        applyDCDrag(input)
+    end
 end)
 
 -- DC ESP skill detection
