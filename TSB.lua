@@ -1381,8 +1381,9 @@ mainTab:CreateToggle({
                 if not char then return end
                 local hum = char:FindFirstChildOfClass("Humanoid")
                 if not hum then return end
+                local hrp = char:FindFirstChild("HumanoidRootPart")
                 pcall(function()
-                    -- Always force WalkSpeed — never read back from hum (stun can corrupt it)
+                    -- Always force WalkSpeed
                     hum.WalkSpeed = noStunLockedSpd
                     -- PlatformStand = true is the main TSB stun mechanism
                     if hum.PlatformStand then hum.PlatformStand = false end
@@ -1396,6 +1397,18 @@ mainTab:CreateToggle({
                     or st == Enum.HumanoidStateType.Ragdoll
                     or st == Enum.HumanoidStateType.GettingUp then
                         hum:ChangeState(Enum.HumanoidStateType.Running)
+                    end
+                    -- Remove knockback forces (BodyVelocity pushes you back → slows forward movement)
+                    if hrp then
+                        local kids = hrp:GetChildren()
+                        for i = 1, #kids do
+                            local inst = kids[i]
+                            if inst:IsA("BodyVelocity") or inst:IsA("BodyForce")
+                            or inst:IsA("LinearVelocity") or inst:IsA("VectorForce")
+                            or inst:IsA("BodyPosition") then
+                                inst:Destroy()
+                            end
+                        end
                     end
                 end)
             end)
