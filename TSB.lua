@@ -9,8 +9,9 @@ end
 -------------------------------------------------------------------------------
 -- SERVICES
 -------------------------------------------------------------------------------
-local RunService    = game:GetService("RunService")
-local Players       = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Players          = game:GetService("Players")
 local HttpService   = game:GetService("HttpService")
 local LocalPlayer   = Players.LocalPlayer
 
@@ -143,72 +144,30 @@ task.spawn(function()
         end
         if not mainFrame then return end
 
-        -- Slider visibility: Rayfield tweens the frame (doesn't set Visible immediately),
-        -- so a signal-based approach fires too late.  Heartbeat polling is instant.
-        local lockedInputs    = {}  -- { frame=Frame, size=UDim2 }
-        local trackedTextBoxes = {}  -- all TextBox objects found in rfGui
-
-        -- Register a TextBox for per-frame property enforcement
-        local function registerTB(obj)
-            if not obj:IsA("TextBox") then return end
-            for _, tb in ipairs(trackedTextBoxes) do
-                if tb == obj then return end
-            end
-            table.insert(trackedTextBoxes, obj)
-        end
+        -- lockedInputs: keeps each input holder frame at its initial size so
+        -- Rayfield's TweenService cannot collapse it while the user is typing.
+        local lockedInputs = {}  -- { frame=Frame, size=UDim2 }
 
         local lastVisible = mainFrame.Visible
         RunService.Heartbeat:Connect(function()
-            -- ── Visibility sync ────────────────────────────────────────────
             local v = mainFrame.Visible
             if v ~= lastVisible then lastVisible = v; rfGui.Enabled = v end
-
-            -- ── Input holder size lock ─────────────────────────────────────
             for i = #lockedInputs, 1, -1 do
                 local info = lockedInputs[i]
                 if info.frame.Parent then
-                    if info.frame.Size ~= info.size then
-                        info.frame.Size = info.size
-                    end
-                    -- Also re-enforce clip in case Rayfield resets it
+                    if info.frame.Size ~= info.size then info.frame.Size = info.size end
                     info.frame.ClipsDescendants = true
                 else
                     table.remove(lockedInputs, i)
                 end
             end
-
-            -- ── TextBox overflow prevention (per-frame) ────────────────────
-            -- Rayfield resets TextScaled/TextSize after creation, so we must
-            -- re-apply every frame.  trackedTextBoxes is small (3–6 items).
-            for i = #trackedTextBoxes, 1, -1 do
-                local tb = trackedTextBoxes[i]
-                if tb.Parent then
-                    if tb.TextScaled              then tb.TextScaled  = false          end
-                    if tb.TextSize ~= 12          then tb.TextSize    = 12             end
-                    if tb.TextTruncate ~= Enum.TextTruncate.AtEnd then
-                        tb.TextTruncate = Enum.TextTruncate.AtEnd
-                    end
-                    local p = tb.Parent
-                    if p and not p.ClipsDescendants then p.ClipsDescendants = true end
-                    local gp = p and p.Parent
-                    if gp and gp:IsA("GuiObject") and not gp.ClipsDescendants then
-                        gp.ClipsDescendants = true
-                    end
-                else
-                    table.remove(trackedTextBoxes, i)
-                end
-            end
         end)
 
-        -- GUI post-processor:
-        -- 1. ClipsDescendants = true on rounded containers → nothing bleeds outside corners
-        -- 2. Blue UIStrokes → thin grey
-        -- 3. Blue fill frames → darker flat colour
-        -- 4. TextBox inputs → auto-scale font + clip parent so numbers never overflow
+        -- GUI post-processor: cosmetic tweaks + input size capture
         local function fixGui(root)
             for _, obj in pairs(root:GetDescendants()) do
                 pcall(function()
-                    -- ── Rounded frames: always clip ──────────────────────────────
+                    -- Clip rounded containers
                     if obj:IsA("Frame") and obj:FindFirstChildOfClass("UICorner") then
                         obj.ClipsDescendants = true
                         local stroke = obj:FindFirstChildOfClass("UIStroke")
@@ -225,7 +184,7 @@ task.spawn(function()
                             end
                         end
                     end
-                    -- ── Blue fill frames ─────────────────────────────────────────
+                    -- Recolour lingering blue fill frames
                     if obj:IsA("Frame") and obj.BackgroundTransparency < 0.5 then
                         local c = obj.BackgroundColor3
                         if c.B > 0.3 and c.B > c.R then
@@ -237,19 +196,16 @@ task.spawn(function()
                             if corner then corner.CornerRadius = UDim.new(0, 4) end
                         end
                     end
-                    -- ── TextBox inputs ────────────────────────────────────────────
-                    -- Register for per-frame Heartbeat enforcement (TextScaled,
-                    -- TextTruncate, ClipsDescendants).  Also lock the holder size.
+                    -- Lock input holder frame size (Rayfield collapses it on type/unfocus)
                     if obj:IsA("TextBox") then
-                        registerTB(obj)
                         local f = obj.Parent
                         if f and f:IsA("Frame") then
                             f.AutomaticSize = Enum.AutomaticSize.None
-                            local alreadyTracked = false
+                            local tracked = false
                             for _, info in ipairs(lockedInputs) do
-                                if info.frame == f then alreadyTracked = true; break end
+                                if info.frame == f then tracked = true; break end
                             end
-                            if not alreadyTracked then
+                            if not tracked then
                                 task.delay(0.3, function()
                                     if not f.Parent then return end
                                     local sz = f.Size
@@ -267,14 +223,8 @@ task.spawn(function()
         end
         task.wait(1.5)
         fixGui(rfGui)
-        -- Also register any TextBoxes found in the initial scan
-        for _, obj in pairs(rfGui:GetDescendants()) do
-            pcall(registerTB, obj)
-        end
-        -- Re-run when new elements are added (tab switches, new inputs)
-        rfGui.DescendantAdded:Connect(function(obj)
+        rfGui.DescendantAdded:Connect(function()
             task.wait(0.1)
-            pcall(registerTB, obj)
             pcall(fixGui, rfGui)
         end)
     end)
@@ -1396,6 +1346,274 @@ hookAnimation("12296113986", function(track, char)
         root.Anchored = false
     end)
 end)
+
+-- ── 5. Wall Combo Anywhere ───────────────────────────────────────────────────
+autoTechTab:CreateSection("Wall Combo")
+autoTechTab:CreateLabel("Enable: 4x M1 + Q triggers wall combo anywhere, not just near walls.")
+
+local wallComboEnabled = false
+autoTechTab:CreateToggle({
+    Name         = "Wall Combo Anywhere",
+    CurrentValue = false,
+    Flag         = "WallComboAnywhere",
+    Callback     = function(v) wallComboEnabled = v end,
+})
+
+do
+    local m1Count   = 0
+    local lastM1    = 0
+    local M1_WINDOW = 2.5   -- seconds to count 4 M1s
+    local qCooldown = false
+
+    UserInputService.InputBegan:Connect(function(input, gp)
+        if gp or not wallComboEnabled then return end
+
+        -- Count left-click M1s within the time window
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local now = tick()
+            if now - lastM1 > M1_WINDOW then m1Count = 0 end
+            m1Count  = m1Count + 1
+            lastM1   = now
+        end
+
+        -- Q pressed after 4+ M1 hits → try wall combo
+        if input.KeyCode == Enum.KeyCode.Q and m1Count >= 4 and not qCooldown then
+            local char = LocalPlayer.Character
+            if not char then return end
+            local hrp  = char:FindFirstChild("HumanoidRootPart")
+            local comm = char:FindFirstChild("Communicate")
+            if not hrp or not comm then return end
+
+            -- Find nearest enemy player within 25 studs
+            local nearest, nearestDist
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= LocalPlayer and plr.Character then
+                    local phrp = plr.Character:FindFirstChild("HumanoidRootPart")
+                    if phrp then
+                        local d = (phrp.Position - hrp.Position).Magnitude
+                        if not nearestDist or d < nearestDist then
+                            nearest     = plr.Character
+                            nearestDist = d
+                        end
+                    end
+                end
+            end
+
+            if nearest and nearestDist and nearestDist <= 25 then
+                local enemyHRP = nearest:FindFirstChild("HumanoidRootPart")
+                if enemyHRP then
+                    -- Spawn a thin invisible wall behind the enemy (client-side)
+                    -- so the server's wall-proximity raycast finds a surface
+                    local wallPart = Instance.new("Part")
+                    wallPart.Anchored      = true
+                    wallPart.CanCollide    = true
+                    wallPart.Transparency  = 1
+                    wallPart.Size          = Vector3.new(12, 24, 1)
+                    wallPart.CFrame        = CFrame.new(
+                        enemyHRP.Position - enemyHRP.CFrame.LookVector * 2.5
+                    )
+                    wallPart.Parent = workspace
+
+                    qCooldown = true
+                    m1Count   = 0
+
+                    -- Fire dash into the wall
+                    pcall(function()
+                        comm:FireServer({
+                            Dash = Enum.KeyCode.W,
+                            Key  = Enum.KeyCode.Q,
+                            Goal = "KeyPress",
+                        })
+                    end)
+
+                    -- Clean up temporary wall and reset cooldown
+                    task.delay(0.6, function()
+                        pcall(function() wallPart:Destroy() end)
+                        qCooldown = false
+                    end)
+                end
+            end
+        end
+    end)
+end
+
+-------------------------------------------------------------------------------
+-- ═══ TAB: ESP ═══
+-------------------------------------------------------------------------------
+local espTab = Window:CreateTab("👁 ESP", "eye")
+
+-- ── Death Counter detection ──────────────────────────────────────────────────
+-- Saitama's "Death Counter" ultimate in TSB adds identifiable objects to the
+-- character (BoolValues / StringValues / ParticleEmitters).  We scan for them.
+local DC_KEYWORDS = { "death", "counter", "ultimate", "rage", "dc", "saitama" }
+
+local function strHasKeyword(s)
+    s = s:lower()
+    for _, kw in ipairs(DC_KEYWORDS) do
+        if s:find(kw, 1, true) then return true end
+    end
+    return false
+end
+
+local function isInDeathCounter(char)
+    if not char then return false end
+    for _, obj in ipairs(char:GetDescendants()) do
+        if strHasKeyword(obj.Name) then
+            if obj:IsA("BoolValue")   and obj.Value          then return true end
+            if obj:IsA("StringValue") and obj.Value ~= ""    then return true end
+            if obj:IsA("NumberValue") and obj.Value > 0      then return true end
+            if obj:IsA("ParticleEmitter") or obj:IsA("Beam") then return true end
+        end
+    end
+    return false
+end
+
+-- ── ESP state ────────────────────────────────────────────────────────────────
+local espEnabled = false
+local espObjects = {}   -- player → { billboard, label, healthBar, healthFill }
+
+local ESP_NORMAL_COLOR = Color3.fromRGB(255, 255, 255)
+local ESP_DC_COLOR     = Color3.fromRGB(255, 50, 50)
+
+local function buildESP(player)
+    if player == LocalPlayer then return end
+    if espObjects[player] then return end
+
+    local function attach(char)
+        if not char then return end
+        local hrp = char:WaitForChild("HumanoidRootPart", 3)
+        if not hrp then return end
+
+        -- Remove stale billboard if character respawned
+        if espObjects[player] then
+            pcall(function() espObjects[player].billboard:Destroy() end)
+            espObjects[player] = nil
+        end
+
+        local bb = Instance.new("BillboardGui")
+        bb.Name         = "BasicHubESP"
+        bb.Size         = UDim2.new(0, 130, 0, 50)
+        bb.StudsOffset  = Vector3.new(0, 4, 0)
+        bb.AlwaysOnTop  = true
+        bb.MaxDistance  = 1200
+        bb.Parent       = hrp
+
+        -- Name label
+        local nameLabel = Instance.new("TextLabel", bb)
+        nameLabel.Size                  = UDim2.new(1, 0, 0.55, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.TextColor3            = ESP_NORMAL_COLOR
+        nameLabel.TextStrokeTransparency = 0.5
+        nameLabel.TextStrokeColor3      = Color3.fromRGB(0, 0, 0)
+        nameLabel.Font                  = Enum.Font.GothamBold
+        nameLabel.TextSize              = 13
+        nameLabel.Text                  = player.Name
+        nameLabel.TextXAlignment        = Enum.TextXAlignment.Center
+
+        -- Health bar background
+        local hBG = Instance.new("Frame", bb)
+        hBG.Size               = UDim2.new(0.8, 0, 0, 6)
+        hBG.Position           = UDim2.new(0.1, 0, 0.7, 0)
+        hBG.BackgroundColor3   = Color3.fromRGB(40, 40, 40)
+        hBG.BorderSizePixel    = 0
+        local hBGCorner = Instance.new("UICorner", hBG)
+        hBGCorner.CornerRadius = UDim.new(1, 0)
+
+        -- Health bar fill
+        local hFill = Instance.new("Frame", hBG)
+        hFill.Size             = UDim2.new(1, 0, 1, 0)
+        hFill.BackgroundColor3 = Color3.fromRGB(80, 220, 80)
+        hFill.BorderSizePixel  = 0
+        local hFillCorner = Instance.new("UICorner", hFill)
+        hFillCorner.CornerRadius = UDim.new(1, 0)
+
+        espObjects[player] = {
+            billboard   = bb,
+            label       = nameLabel,
+            healthBG    = hBG,
+            healthFill  = hFill,
+        }
+    end
+
+    if player.Character then attach(player.Character) end
+    player.CharacterAdded:Connect(attach)
+end
+
+local function removeESP(player)
+    if espObjects[player] then
+        pcall(function() espObjects[player].billboard:Destroy() end)
+        espObjects[player] = nil
+    end
+end
+
+local function enableESP()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        buildESP(plr)
+    end
+end
+
+local function disableESP()
+    for plr in pairs(espObjects) do
+        removeESP(plr)
+    end
+end
+
+-- Update labels + health bars every frame
+RunService.Heartbeat:Connect(function()
+    if not espEnabled then return end
+    for player, data in pairs(espObjects) do
+        pcall(function()
+            if not data.billboard.Parent then return end
+            local char = player.Character
+            local hum  = char and char:FindFirstChildOfClass("Humanoid")
+
+            -- Death Counter label
+            if isInDeathCounter(char) then
+                data.label.Text       = "☠ " .. player.Name .. "\n[DEATH COUNTER]"
+                data.label.TextColor3 = ESP_DC_COLOR
+            else
+                data.label.Text       = player.Name
+                data.label.TextColor3 = ESP_NORMAL_COLOR
+            end
+
+            -- Health bar
+            if hum then
+                local pct = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
+                data.healthFill.Size = UDim2.new(pct, 0, 1, 0)
+                if pct > 0.5 then
+                    data.healthFill.BackgroundColor3 = Color3.fromRGB(80, 220, 80)
+                elseif pct > 0.25 then
+                    data.healthFill.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
+                else
+                    data.healthFill.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+                end
+            end
+        end)
+    end
+end)
+
+-- Player join/leave
+Players.PlayerAdded:Connect(function(plr)
+    if espEnabled then buildESP(plr) end
+end)
+Players.PlayerRemoving:Connect(function(plr)
+    removeESP(plr)
+end)
+
+-- ── ESP UI ───────────────────────────────────────────────────────────────────
+espTab:CreateSection("Players")
+
+espTab:CreateToggle({
+    Name         = "Player ESP  (names + health)",
+    CurrentValue = false,
+    Flag         = "PlayerESP",
+    Callback     = function(v)
+        espEnabled = v
+        if v then enableESP() else disableESP() end
+    end,
+})
+
+espTab:CreateLabel("DeathCounter: ESP auto-highlights players using Saitama's ultimate in red.")
 
 -------------------------------------------------------------------------------
 -- ═══ TAB: MISC ═══
