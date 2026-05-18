@@ -1363,10 +1363,9 @@ mainTab:CreateToggle({
 mainTab:CreateDivider()
 mainTab:CreateSection("Combat")
 
--- No Stun: aggressive Heartbeat — restores speed, clears all stun attrs, prevents ragdoll/PlatformStand
-local NoStunConn   = nil
-local noStunSpeed  = 16
-local STUN_ATTRS   = {"Stun","Stunned","IsStunned","StunTime","StunDuration","HitStun","M1Stun"}
+-- No Stun: purely client-side — every frame force humanoid out of any stun state
+local NoStunConn  = nil
+local noStunSpeed = 16
 
 mainTab:CreateToggle({
     Name="No Stun", CurrentValue=false, Flag="NoStun",
@@ -1378,30 +1377,24 @@ mainTab:CreateToggle({
                 local hum = char:FindFirstChildOfClass("Humanoid")
                 if not hum then return end
                 pcall(function()
-                    -- Restore WalkSpeed
+                    -- PlatformStand = main stun method in TSB (server sets true → we force false)
+                    if hum.PlatformStand then hum.PlatformStand = false end
+                    -- Restore WalkSpeed if server zeroed/slowed it
                     if hum.WalkSpeed > 2 then
                         noStunSpeed = hum.WalkSpeed
                     else
                         hum.WalkSpeed = noStunSpeed
                     end
-                    -- Block PlatformStand (most common TSB stun method)
-                    if hum.PlatformStand then hum.PlatformStand = false end
-                    -- Disable ragdoll / fall states
+                    -- Disable all stun-related humanoid states (purely client properties)
                     hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
                     hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll,     false)
-                    -- Wipe every stun attribute on char & player
-                    for i = 1, #STUN_ATTRS do
-                        local a  = STUN_ATTRS[i]
-                        local cv = char:GetAttribute(a)
-                        if cv ~= nil then
-                            if type(cv) == "boolean" then char:SetAttribute(a, false)
-                            elseif type(cv) == "number" and cv > 0 then char:SetAttribute(a, 0) end
-                        end
-                        local pv = LocalPlayer:GetAttribute(a)
-                        if pv ~= nil then
-                            if type(pv) == "boolean" then LocalPlayer:SetAttribute(a, false)
-                            elseif type(pv) == "number" and pv > 0 then LocalPlayer:SetAttribute(a, 0) end
-                        end
+                    hum:SetStateEnabled(Enum.HumanoidStateType.GettingUp,   false)
+                    -- Keep humanoid in Running state (prevents stuck/locked state)
+                    local st = hum:GetState()
+                    if st == Enum.HumanoidStateType.FallingDown
+                    or st == Enum.HumanoidStateType.Ragdoll
+                    or st == Enum.HumanoidStateType.GettingUp then
+                        hum:ChangeState(Enum.HumanoidStateType.Running)
                     end
                 end)
             end)
@@ -1411,33 +1404,10 @@ mainTab:CreateToggle({
                 pcall(function()
                     humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
                     humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll,     true)
+                    humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp,   true)
                 end)
             end
         end
-    end,
-})
-
--- Infinite Jump — Mouse.KeyDown + Seated trick (bypasses JumpRequest block in TSB)
-local infiniteJumpOn = false
-local _ijMouse = LocalPlayer:GetMouse()
-_ijMouse.KeyDown:connect(function(k)
-    if not infiniteJumpOn then return end
-    if k:byte() == 32 then
-        local char = LocalPlayer.Character
-        local hum  = char and char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            pcall(function()
-                hum:ChangeState("Jumping")
-                task.wait(0.1)
-                hum:ChangeState("Seated")
-            end)
-        end
-    end
-end)
-mainTab:CreateToggle({
-    Name="Infinite Jump", CurrentValue=false, Flag="InfiniteJump",
-    Callback=function(v)
-        infiniteJumpOn = v
     end,
 })
 
