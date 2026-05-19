@@ -1,8 +1,8 @@
 ﻿-- Protection
 local ProtectionConfig = { SecretKey = "TSBCode1234", HubName = "BasicHub" }
--- Some executors don't share _G across loadstring — warn only, never block GUI
+-- _G may not be shared across loadstring in all executors, so we warn but never block
 if not _G[ProtectionConfig.SecretKey] then
-    warn("[BasicHub] Loaded without key system")
+    warn("[BasicHub] Loaded without key system – continuing anyway")
 end
 
 -------------------------------------------------------------------------------
@@ -33,15 +33,11 @@ LocalPlayer.CharacterAdded:Connect(refreshCharacter)
 -- EXPLOITS  (client-side attribute unlocks used by TSB)
 -------------------------------------------------------------------------------
 local function applyExploits()
-    local name = LocalPlayer.Name
-    local uid  = tostring(LocalPlayer.UserId)
     pcall(function()
-        if workspace:GetAttribute("VIPServer")      ~= uid  then workspace:SetAttribute("VIPServer",      uid)  end
-        if workspace:GetAttribute("VIPServerOwner") ~= name then workspace:SetAttribute("VIPServerOwner", name) end
-        if workspace:GetAttribute("NoDashCooldown") == nil  then workspace:SetAttribute("NoDashCooldown", false) end
-        if workspace:GetAttribute("NoFatigue")      == nil  then workspace:SetAttribute("NoFatigue",      false) end
-        if LocalPlayer:GetAttribute("ExtraSlots")   == nil  then LocalPlayer:SetAttribute("ExtraSlots",   false) end
-        if LocalPlayer:GetAttribute("EmoteSearchBar")== nil then LocalPlayer:SetAttribute("EmoteSearchBar",false) end
+        if workspace:GetAttribute("NoDashCooldown")   == nil   then workspace:SetAttribute("NoDashCooldown",   false) end
+        if workspace:GetAttribute("NoFatigue")        == nil   then workspace:SetAttribute("NoFatigue",        false) end
+        if LocalPlayer:GetAttribute("ExtraSlots")     == nil   then LocalPlayer:SetAttribute("ExtraSlots",     false) end
+        if LocalPlayer:GetAttribute("EmoteSearchBar") == nil   then LocalPlayer:SetAttribute("EmoteSearchBar", false) end
     end)
 end
 applyExploits()
@@ -78,7 +74,7 @@ local function MakeBasicHubLib()
             guiRoot           = sg
         end)
     end
-    -- 3) PlayerGui
+    -- 3) PlayerGui (final fallback)
     if not guiRoot then
         pcall(function()
             local sg = Instance.new("ScreenGui")
@@ -1431,6 +1427,18 @@ local function applyNoStun(char)
             end)
         end)
     end
+
+    -- Stop stun animations the instant they play (AnimationPlayed fires before first frame)
+    noStunConns[#noStunConns + 1] = hum.AnimationPlayed:Connect(function(track)
+        if not noStunEnabled then return end
+        pcall(function()
+            -- Stun animations in TSB are short (< 1.5s) non-looped tracks
+            if track.Looped then return end
+            if track.Length and track.Length > 0 and track.Length < 1.5 then
+                track:Stop(0)
+            end
+        end)
+    end)
 end
 
 mainTab:CreateToggle({
@@ -1843,7 +1851,13 @@ local function openPlayerPicker()
                     Rayfield:Notify({ Title="Combat", Content=capturedPlr.Name .. " has no character!", Duration=3, Image=4483362458 })
                     return
                 end
-                myHRP.CFrame = tHRP.CFrame + Vector3.new(0, 3, 0)
+                local dest = tHRP.CFrame + Vector3.new(0, 3, 0)
+                -- SetPrimaryPartCFrame is more reliable than direct CFrame assignment in TSB
+                pcall(function()
+                    local myChar = LocalPlayer.Character
+                    if myChar then myChar:SetPrimaryPartCFrame(dest) end
+                end)
+                pcall(function() myHRP.CFrame = dest end)
                 Rayfield:Notify({ Title="Combat", Content="Teleported to " .. capturedPlr.Name, Duration=3, Image=4483362458 })
             end)
         end
@@ -2060,10 +2074,15 @@ tpTab:CreateInput({ Name="Z", PlaceholderText="0", Flag="TpZ", RemoveTextAfterFo
 tpTab:CreateButton({
     Name = "Teleport to Coordinates",
     Callback = function()
-        if humanoidRootPart then
-            humanoidRootPart.CFrame = CFrame.new(customX, customY, customZ)
-            Rayfield:Notify({ Title="Teleport", Content=customX..", "..customY..", "..customZ, Duration=2, Image=4483362458 })
-        end
+        local dest = CFrame.new(customX, customY, customZ)
+        pcall(function()
+            local myChar = LocalPlayer.Character
+            if myChar then myChar:SetPrimaryPartCFrame(dest) end
+        end)
+        pcall(function()
+            if humanoidRootPart then humanoidRootPart.CFrame = dest end
+        end)
+        Rayfield:Notify({ Title="Teleport", Content=customX..", "..customY..", "..customZ, Duration=2, Image=4483362458 })
     end,
 })
 
