@@ -1,4 +1,4 @@
---[[
+﻿--[[
     ================================================================
     [ SCRIPT INFORMATION ]
     Project: BasicHub - The Strongest Battlegrounds
@@ -174,35 +174,20 @@ local function CreateGUI()
 
     -- ── ScreenGui ─────────────────────────────────────────────────────────────
     local guiRoot
-    -- 1) gethui()
     pcall(function()
-        if type(gethui) == "function" then
-            local sg = Instance.new("ScreenGui")
-            sg.Name         = "BasicHub_KeySystem"
-            sg.ResetOnSpawn = false
-            sg.Parent       = gethui()
-            guiRoot         = sg
-        end
+        if guiRoot then return end
+        local sg = Instance.new("ScreenGui")
+        sg.Name         = "BasicHub_KeySystem"
+        sg.ResetOnSpawn = false
+        sg.Parent       = coreGui
+        guiRoot         = sg
     end)
-    -- 2) CoreGui
     if not guiRoot then
-        pcall(function()
-            local sg = Instance.new("ScreenGui")
-            sg.Name         = "BasicHub_KeySystem"
-            sg.ResetOnSpawn = false
-            sg.Parent       = coreGui
-            guiRoot         = sg
-        end)
-    end
-    -- 3) PlayerGui
-    if not guiRoot then
-        pcall(function()
-            local sg = Instance.new("ScreenGui")
-            sg.Name         = "BasicHub_KeySystem"
-            sg.ResetOnSpawn = false
-            sg.Parent       = player:WaitForChild("PlayerGui")
-            guiRoot         = sg
-        end)
+        local sg = Instance.new("ScreenGui")
+        sg.Name         = "BasicHub_KeySystem"
+        sg.ResetOnSpawn = false
+        sg.Parent       = player:WaitForChild("PlayerGui")
+        guiRoot         = sg
     end
 
     -- Colours (matching TSB.lua custom GUI)
