@@ -174,20 +174,35 @@ local function CreateGUI()
 
     -- ── ScreenGui ─────────────────────────────────────────────────────────────
     local guiRoot
+    -- 1) gethui()
     pcall(function()
-        if guiRoot then return end
-        local sg = Instance.new("ScreenGui")
-        sg.Name         = "BasicHub_KeySystem"
-        sg.ResetOnSpawn = false
-        sg.Parent       = coreGui
-        guiRoot         = sg
+        if type(gethui) == "function" then
+            local sg = Instance.new("ScreenGui")
+            sg.Name         = "BasicHub_KeySystem"
+            sg.ResetOnSpawn = false
+            sg.Parent       = gethui()
+            guiRoot         = sg
+        end
     end)
+    -- 2) CoreGui
     if not guiRoot then
-        local sg = Instance.new("ScreenGui")
-        sg.Name         = "BasicHub_KeySystem"
-        sg.ResetOnSpawn = false
-        sg.Parent       = player:WaitForChild("PlayerGui")
-        guiRoot         = sg
+        pcall(function()
+            local sg = Instance.new("ScreenGui")
+            sg.Name         = "BasicHub_KeySystem"
+            sg.ResetOnSpawn = false
+            sg.Parent       = coreGui
+            guiRoot         = sg
+        end)
+    end
+    -- 3) PlayerGui
+    if not guiRoot then
+        pcall(function()
+            local sg = Instance.new("ScreenGui")
+            sg.Name         = "BasicHub_KeySystem"
+            sg.ResetOnSpawn = false
+            sg.Parent       = player:WaitForChild("PlayerGui")
+            guiRoot         = sg
+        end)
     end
 
     -- Colours (matching TSB.lua custom GUI)

@@ -1,9 +1,8 @@
 ﻿-- Protection
 local ProtectionConfig = { SecretKey = "TSBCode1234", HubName = "BasicHub" }
+-- Some executors don't share _G across loadstring — warn only, never block GUI
 if not _G[ProtectionConfig.SecretKey] then
-    local p = game:GetService("Players").LocalPlayer
-    if p then p:Kick("\n Unauthorized Execution \n\nUse the official BasicHub key system.") end
-    return
+    warn("[BasicHub] Loaded without key system")
 end
 
 -------------------------------------------------------------------------------
@@ -57,21 +56,37 @@ local function MakeBasicHubLib()
     -- ── ScreenGui ─────────────────────────────────────────────────────────────
     local coreGui = game:GetService("CoreGui")
     local guiRoot
+    -- 1) gethui() — most reliable in exploit executors
     pcall(function()
-        if guiRoot then return end
-        local sg = Instance.new("ScreenGui")
-        sg.Name           = "BasicHub_GUI"
-        sg.ResetOnSpawn   = false
-        sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-        sg.Parent         = coreGui
-        guiRoot           = sg
+        if type(gethui) == "function" then
+            local sg = Instance.new("ScreenGui")
+            sg.Name           = "BasicHub_GUI"
+            sg.ResetOnSpawn   = false
+            sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+            sg.Parent         = gethui()
+            guiRoot           = sg
+        end
     end)
+    -- 2) CoreGui
     if not guiRoot then
-        local sg = Instance.new("ScreenGui")
-        sg.Name         = "BasicHub_GUI"
-        sg.ResetOnSpawn = false
-        sg.Parent       = LocalPlayer:WaitForChild("PlayerGui")
-        guiRoot         = sg
+        pcall(function()
+            local sg = Instance.new("ScreenGui")
+            sg.Name           = "BasicHub_GUI"
+            sg.ResetOnSpawn   = false
+            sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+            sg.Parent         = coreGui
+            guiRoot           = sg
+        end)
+    end
+    -- 3) PlayerGui
+    if not guiRoot then
+        pcall(function()
+            local sg = Instance.new("ScreenGui")
+            sg.Name         = "BasicHub_GUI"
+            sg.ResetOnSpawn = false
+            sg.Parent       = LocalPlayer:WaitForChild("PlayerGui")
+            guiRoot         = sg
+        end)
     end
 
     -- ── Dimensions & colours ──────────────────────────────────────────────────
