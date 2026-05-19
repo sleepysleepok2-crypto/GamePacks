@@ -911,31 +911,43 @@ local function SkidFling(TargetPlayer)
     BV.Velocity  = Vector3.new(0,0,0)
     BV.MaxForce  = Vector3.new(9e9,9e9,9e9)
 
-    Hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+    pcall(function() Hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false) end)
+
+    -- Stop fling if local character dies mid-fling
+    local charDied = false
+    local diedConn = Hum.Died:Connect(function() charDied = true; FlingActive = false end)
 
     if     TRoot  then SFBasePart(TRoot)
     elseif THead  then SFBasePart(THead)
     elseif Handle then SFBasePart(Handle)
     end
 
-    BV:Destroy()
-    Hum:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
-    workspace.CurrentCamera.CameraSubject = Hum
+    diedConn:Disconnect()
 
-    if BH_OldPos then
+    -- Always restore FallenPartsDestroyHeight regardless of what happened
+    workspace.FallenPartsDestroyHeight = BH_FPDH
+
+    pcall(function() BV:Destroy() end)
+    pcall(function() Hum:SetStateEnabled(Enum.HumanoidStateType.Seated, true) end)
+    pcall(function() workspace.CurrentCamera.CameraSubject = Hum end)
+
+    -- Only teleport back if character is still alive
+    if BH_OldPos and not charDied then
+        local t0 = tick()
         repeat
-            RootPart.CFrame = BH_OldPos * CFrame.new(0,.5,0)
-            Char:SetPrimaryPartCFrame(BH_OldPos * CFrame.new(0,.5,0))
-            Hum:ChangeState("GettingUp")
-            for _, part in pairs(Char:GetChildren()) do
-                if part:IsA("BasePart") then
-                    part.Velocity = Vector3.new()
-                    part.RotVelocity = Vector3.new()
+            pcall(function()
+                RootPart.CFrame = BH_OldPos * CFrame.new(0,.5,0)
+                Char:SetPrimaryPartCFrame(BH_OldPos * CFrame.new(0,.5,0))
+                Hum:ChangeState("GettingUp")
+                for _, part in pairs(Char:GetChildren()) do
+                    if part:IsA("BasePart") then
+                        part.Velocity    = Vector3.new()
+                        part.RotVelocity = Vector3.new()
+                    end
                 end
-            end
+            end)
             task.wait()
-        until (RootPart.Position - BH_OldPos.p).Magnitude < 25
-        workspace.FallenPartsDestroyHeight = BH_FPDH
+        until (RootPart.Position - BH_OldPos.p).Magnitude < 25 or tick() - t0 > 5
     end
 end
 
