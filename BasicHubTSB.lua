@@ -1,4 +1,4 @@
-﻿--[[
+--[[
     ================================================================
     [ SCRIPT INFORMATION ]
     Project: BasicHub - The Strongest Battlegrounds

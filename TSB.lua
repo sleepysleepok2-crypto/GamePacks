@@ -1,4 +1,4 @@
-﻿-- Protection
+-- Protection
 local ProtectionConfig = { SecretKey = "TSBCode1234", HubName = "BasicHub" }
 if not _G[ProtectionConfig.SecretKey] then
     local p = game:GetService("Players").LocalPlayer
