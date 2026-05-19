@@ -44,21 +44,35 @@ local lEncode, lDecode, lDigest = a3, aw, Z
 
 local useNonce = true
 
+-- Executor detection
+local isXeno = (identifyexecutor and identifyexecutor():lower():find("xeno")) or
+               (typeof(XENO) ~= "nil") or false
+
 local function safeRequest(options)
-    local req = request or http_request or syn_request or (http and http.request)
+    local req = (syn and syn.request)
+             or request
+             or http_request
+             or syn_request
+             or (http and http.request)
+             or (isXeno and XENO and XENO.request)
+             or nil
     if not req then return nil, "HTTP requests not supported" end
     local success, response = pcall(function() return req(options) end)
     if success and response then return response else return nil, "Connection Error" end
 end
 
-local fSetClipboard  = setclipboard or toclipboard or function() end
+local fSetClipboard  = setclipboard or toclipboard or (Clipboard and Clipboard.set) or function() end
 local fStringChar    = string.char
 local fToString      = tostring
 local fOsTime        = os.time
 local fMathRandom    = math.random
 local fMathFloor     = math.floor
-local fGetHwid       = gethwid or function()
-    return game:GetService("RbxAnalyticsService"):GetClientId()
+local fGetHwid       = gethwid or (isXeno and function()
+    local ok, id = pcall(function() return game:GetService("RbxAnalyticsService"):GetClientId() end)
+    return ok and id or tostring(game:GetService("Players").LocalPlayer.UserId)
+end) or function()
+    local ok, id = pcall(function() return game:GetService("RbxAnalyticsService"):GetClientId() end)
+    return ok and id or tostring(game:GetService("Players").LocalPlayer.UserId)
 end
 
 local cachedLink, cachedTime = "", 0
@@ -80,7 +94,7 @@ local function generateNonce()
     return str
 end
 
--- forceRefresh=true → bypass cache and always fetch a fresh lootlabs link
+-- forceRefresh=true в†’ bypass cache and always fetch a fresh lootlabs link
 -- Retries up to 3 times with 1-second delay between attempts
 local function cacheLink(forceRefresh)
     if forceRefresh or cachedTime + (10 * 60) < fOsTime() then
@@ -172,22 +186,37 @@ local function CreateGUI()
     local UIS     = game:GetService("UserInputService")
     local TS      = game:GetService("TweenService")
 
-    -- ── ScreenGui ─────────────────────────────────────────────────────────────
+    -- в”Ђв”Ђ ScreenGui в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     local guiRoot
+    -- 1) gethui() вЂ” Xeno / modern executors
     pcall(function()
-        if guiRoot then return end
-        local sg = Instance.new("ScreenGui")
-        sg.Name         = "BasicHub_KeySystem"
-        sg.ResetOnSpawn = false
-        sg.Parent       = coreGui
-        guiRoot         = sg
+        if type(gethui) == "function" then
+            local sg = Instance.new("ScreenGui")
+            sg.Name         = "BasicHub_KeySystem"
+            sg.ResetOnSpawn = false
+            sg.Parent       = gethui()
+            guiRoot         = sg
+        end
     end)
+    -- 2) CoreGui
     if not guiRoot then
-        local sg = Instance.new("ScreenGui")
-        sg.Name         = "BasicHub_KeySystem"
-        sg.ResetOnSpawn = false
-        sg.Parent       = player:WaitForChild("PlayerGui")
-        guiRoot         = sg
+        pcall(function()
+            local sg = Instance.new("ScreenGui")
+            sg.Name         = "BasicHub_KeySystem"
+            sg.ResetOnSpawn = false
+            sg.Parent       = coreGui
+            guiRoot         = sg
+        end)
+    end
+    -- 3) PlayerGui
+    if not guiRoot then
+        pcall(function()
+            local sg = Instance.new("ScreenGui")
+            sg.Name         = "BasicHub_KeySystem"
+            sg.ResetOnSpawn = false
+            sg.Parent       = player:WaitForChild("PlayerGui")
+            guiRoot         = sg
+        end)
     end
 
     -- Colours (matching TSB.lua custom GUI)
@@ -203,7 +232,7 @@ local function CreateGUI()
     local C_RED     = Color3.fromRGB(255, 70,  70 )
     local C_GREEN   = Color3.fromRGB(0,   210, 100)
 
-    -- ── Main frame ────────────────────────────────────────────────────────────
+    -- в”Ђв”Ђ Main frame в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     local Main = Instance.new("Frame", guiRoot)
     Main.Name             = "MainFrame"
     Main.Size             = UDim2.new(0, 340, 0, 246)
@@ -247,7 +276,7 @@ local function CreateGUI()
         if inp.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
     end)
 
-    -- ── Top bar ───────────────────────────────────────────────────────────────
+    -- в”Ђв”Ђ Top bar в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     local TopBar = Instance.new("Frame", Main)
     TopBar.Size             = UDim2.new(1, 0, 0, 42)
     TopBar.BackgroundColor3 = C_TOP_BG
@@ -273,14 +302,14 @@ local function CreateGUI()
     closeBtn.Size              = UDim2.new(0, 26, 0, 26)
     closeBtn.Position          = UDim2.new(1, -32, 0.5, -13)
     closeBtn.BackgroundColor3  = Color3.fromRGB(180, 40, 40)
-    closeBtn.Text              = "✕"
+    closeBtn.Text              = "вњ•"
     closeBtn.TextColor3        = Color3.fromRGB(255, 255, 255)
     closeBtn.Font              = Enum.Font.GothamBold
     closeBtn.TextSize          = 11
     Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
     closeBtn.MouseButton1Click:Connect(function() guiRoot:Destroy() end)
 
-    -- ── Description ───────────────────────────────────────────────────────────
+    -- в”Ђв”Ђ Description в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     local descLbl = Instance.new("TextLabel", Main)
     descLbl.Size                   = UDim2.new(1, -20, 0, 22)
     descLbl.Position               = UDim2.new(0, 10, 0, 46)
@@ -291,7 +320,7 @@ local function CreateGUI()
     descLbl.TextSize               = 12
     descLbl.TextXAlignment         = Enum.TextXAlignment.Center
 
-    -- ── Key input ─────────────────────────────────────────────────────────────
+    -- в”Ђв”Ђ Key input в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     local inputHolder = Instance.new("Frame", Main)
     inputHolder.Size             = UDim2.new(0.88, 0, 0, 36)
     inputHolder.Position         = UDim2.new(0.06, 0, 0, 76)
@@ -321,7 +350,7 @@ local function CreateGUI()
         TS:Create(inputStroke, TweenInfo.new(0.15), { Color = Color3.fromRGB(46, 46, 62) }):Play()
     end)
 
-    -- ── Buttons ───────────────────────────────────────────────────────────────
+    -- в”Ђв”Ђ Buttons в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     local verifyBtn = Instance.new("TextButton", Main)
     verifyBtn.Size             = UDim2.new(0.42, 0, 0, 34)
     verifyBtn.Position         = UDim2.new(0.06, 0, 0, 122)
@@ -342,7 +371,7 @@ local function CreateGUI()
     getKeyBtn.TextSize         = 13
     Instance.new("UICorner", getKeyBtn).CornerRadius = UDim.new(0, 7)
 
-    -- ── Status ────────────────────────────────────────────────────────────────
+    -- в”Ђв”Ђ Status в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     local statusLbl = Instance.new("TextLabel", Main)
     statusLbl.Name                   = "StatusLabel"
     statusLbl.Size                   = UDim2.new(1, -20, 0, 24)
@@ -354,7 +383,7 @@ local function CreateGUI()
     statusLbl.TextSize               = 12
     statusLbl.TextXAlignment         = Enum.TextXAlignment.Center
 
-    -- ── Info note ─────────────────────────────────────────────────────────────
+    -- в”Ђв”Ђ Info note в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     local infoLbl = Instance.new("TextLabel", Main)
     infoLbl.Size                   = UDim2.new(1, -20, 0, 18)
     infoLbl.Position               = UDim2.new(0, 10, 0, 194)
@@ -366,7 +395,7 @@ local function CreateGUI()
     infoLbl.TextXAlignment         = Enum.TextXAlignment.Center
     infoLbl.TextWrapped            = true
 
-    -- ── Hover effects ─────────────────────────────────────────────────────────
+    -- в”Ђв”Ђ Hover effects в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     verifyBtn.MouseEnter:Connect(function()
         TS:Create(verifyBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(0, 160, 255) }):Play()
     end)
@@ -380,7 +409,7 @@ local function CreateGUI()
         TS:Create(getKeyBtn, TweenInfo.new(0.1), { BackgroundColor3 = C_BTN_ALT }):Play()
     end)
 
-    -- ── Logic ─────────────────────────────────────────────────────────────────
+    -- в”Ђв”Ђ Logic в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     local function setStatus(text, color)
         statusLbl.Text       = text
         statusLbl.TextColor3 = color or C_SUB
