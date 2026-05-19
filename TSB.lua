@@ -41,8 +41,6 @@ local function applyExploits()
         if workspace:GetAttribute("VIPServerOwner")   ~= name  then workspace:SetAttribute("VIPServerOwner",   name)  end
         if workspace:GetAttribute("NoDashCooldown")   == nil   then workspace:SetAttribute("NoDashCooldown",   false) end
         if workspace:GetAttribute("NoFatigue")        == nil   then workspace:SetAttribute("NoFatigue",        false) end
-        -- NoBlockSlowConn: prevents server from blocking player on slow connection
-        if workspace:GetAttribute("NoBlockSlowConn")  == nil   then workspace:SetAttribute("NoBlockSlowConn",  true)  end
         if LocalPlayer:GetAttribute("ExtraSlots")     == nil   then LocalPlayer:SetAttribute("ExtraSlots",     false) end
         if LocalPlayer:GetAttribute("EmoteSearchBar") == nil   then LocalPlayer:SetAttribute("EmoteSearchBar", false) end
     end)
