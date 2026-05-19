@@ -37,12 +37,14 @@ local function applyExploits()
     local name = LocalPlayer.Name
     local uid  = tostring(LocalPlayer.UserId)
     pcall(function()
-        if workspace:GetAttribute("VIPServer")      ~= uid  then workspace:SetAttribute("VIPServer",      uid)  end
-        if workspace:GetAttribute("VIPServerOwner") ~= name then workspace:SetAttribute("VIPServerOwner", name) end
-        if workspace:GetAttribute("NoDashCooldown") == nil  then workspace:SetAttribute("NoDashCooldown", false) end
-        if workspace:GetAttribute("NoFatigue")      == nil  then workspace:SetAttribute("NoFatigue",      false) end
-        if LocalPlayer:GetAttribute("ExtraSlots")   == nil  then LocalPlayer:SetAttribute("ExtraSlots",   false) end
-        if LocalPlayer:GetAttribute("EmoteSearchBar")== nil then LocalPlayer:SetAttribute("EmoteSearchBar",false) end
+        if workspace:GetAttribute("VIPServer")        ~= uid   then workspace:SetAttribute("VIPServer",        uid)   end
+        if workspace:GetAttribute("VIPServerOwner")   ~= name  then workspace:SetAttribute("VIPServerOwner",   name)  end
+        if workspace:GetAttribute("NoDashCooldown")   == nil   then workspace:SetAttribute("NoDashCooldown",   false) end
+        if workspace:GetAttribute("NoFatigue")        == nil   then workspace:SetAttribute("NoFatigue",        false) end
+        -- NoBlockSlowConn: prevents server from blocking player on slow connection
+        if workspace:GetAttribute("NoBlockSlowConn")  == nil   then workspace:SetAttribute("NoBlockSlowConn",  true)  end
+        if LocalPlayer:GetAttribute("ExtraSlots")     == nil   then LocalPlayer:SetAttribute("ExtraSlots",     false) end
+        if LocalPlayer:GetAttribute("EmoteSearchBar") == nil   then LocalPlayer:SetAttribute("EmoteSearchBar", false) end
     end)
 end
 applyExploits()
@@ -1416,6 +1418,18 @@ local function applyNoStun(char)
             end)
         end)
     end
+
+    -- Stop stun animations the instant they play (AnimationPlayed fires before first frame)
+    noStunConns[#noStunConns + 1] = hum.AnimationPlayed:Connect(function(track)
+        if not noStunEnabled then return end
+        pcall(function()
+            -- Stun animations in TSB are short (< 1.5s) non-looped tracks
+            if track.Looped then return end
+            if track.Length and track.Length > 0 and track.Length < 1.5 then
+                track:Stop(0)
+            end
+        end)
+    end)
 end
 
 mainTab:CreateToggle({
@@ -1828,7 +1842,13 @@ local function openPlayerPicker()
                     Rayfield:Notify({ Title="Combat", Content=capturedPlr.Name .. " has no character!", Duration=3, Image=4483362458 })
                     return
                 end
-                myHRP.CFrame = tHRP.CFrame + Vector3.new(0, 3, 0)
+                local dest = tHRP.CFrame + Vector3.new(0, 3, 0)
+                -- SetPrimaryPartCFrame is more reliable than direct CFrame assignment in TSB
+                pcall(function()
+                    local myChar = LocalPlayer.Character
+                    if myChar then myChar:SetPrimaryPartCFrame(dest) end
+                end)
+                pcall(function() myHRP.CFrame = dest end)
                 Rayfield:Notify({ Title="Combat", Content="Teleported to " .. capturedPlr.Name, Duration=3, Image=4483362458 })
             end)
         end
@@ -2045,10 +2065,15 @@ tpTab:CreateInput({ Name="Z", PlaceholderText="0", Flag="TpZ", RemoveTextAfterFo
 tpTab:CreateButton({
     Name = "Teleport to Coordinates",
     Callback = function()
-        if humanoidRootPart then
-            humanoidRootPart.CFrame = CFrame.new(customX, customY, customZ)
-            Rayfield:Notify({ Title="Teleport", Content=customX..", "..customY..", "..customZ, Duration=2, Image=4483362458 })
-        end
+        local dest = CFrame.new(customX, customY, customZ)
+        pcall(function()
+            local myChar = LocalPlayer.Character
+            if myChar then myChar:SetPrimaryPartCFrame(dest) end
+        end)
+        pcall(function()
+            if humanoidRootPart then humanoidRootPart.CFrame = dest end
+        end)
+        Rayfield:Notify({ Title="Teleport", Content=customX..", "..customY..", "..customZ, Duration=2, Image=4483362458 })
     end,
 })
 
