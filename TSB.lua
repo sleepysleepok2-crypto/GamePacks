@@ -33,19 +33,19 @@ LocalPlayer.CharacterAdded:Connect(refreshCharacter)
 -- EXPLOITS  (client-side attribute unlocks used by TSB)
 -------------------------------------------------------------------------------
 local function applyExploits()
-    local name = LocalPlayer.Name
-    local uid  = tostring(LocalPlayer.UserId)
     pcall(function()
-        if workspace:GetAttribute("VIPServer")      ~= uid  then workspace:SetAttribute("VIPServer",      uid)  end
-        if workspace:GetAttribute("VIPServerOwner") ~= name then workspace:SetAttribute("VIPServerOwner", name) end
-        if workspace:GetAttribute("NoDashCooldown") == nil  then workspace:SetAttribute("NoDashCooldown", false) end
-        if workspace:GetAttribute("NoFatigue")      == nil  then workspace:SetAttribute("NoFatigue",      false) end
-        if LocalPlayer:GetAttribute("ExtraSlots")   == nil  then LocalPlayer:SetAttribute("ExtraSlots",   false) end
+        if workspace:GetAttribute("NoDashCooldown")  == nil then workspace:SetAttribute("NoDashCooldown",  false) end
+        if workspace:GetAttribute("NoFatigue")       == nil then workspace:SetAttribute("NoFatigue",       false) end
+        if LocalPlayer:GetAttribute("ExtraSlots")    == nil then LocalPlayer:SetAttribute("ExtraSlots",    false) end
         if LocalPlayer:GetAttribute("EmoteSearchBar")== nil then LocalPlayer:SetAttribute("EmoteSearchBar",false) end
     end)
 end
 applyExploits()
-LocalPlayer.CharacterAdded:Connect(applyExploits)
+-- Delay on CharacterAdded so TSB can fully init the character before we touch attributes
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(2)
+    applyExploits()
+end)
 
 -------------------------------------------------------------------------------
 -- CUSTOM GUI LIBRARY  (Rayfield-compatible API)
@@ -793,7 +793,10 @@ local Window = Rayfield:CreateWindow({
 -- EMOTEFIX — auto-run silently (no loading GUI, no notifications)
 -------------------------------------------------------------------------------
 task.spawn(function()
-    task.wait(3)
+    -- Xeno and slower executors need more time for animations to register
+    local execName = (identifyexecutor and identifyexecutor():lower()) or ""
+    local waitTime = (execName:find("xeno") or execName:find("delta")) and 6 or 4
+    task.wait(waitTime)
     pcall(function()
         local src = game:HttpGet(
             "https://raw.githubusercontent.com/KHATARSISZX/New/refs/heads/main/EmoteStuff/EmoteFix.lua"
