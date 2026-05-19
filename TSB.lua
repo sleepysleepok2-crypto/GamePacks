@@ -34,11 +34,7 @@ LocalPlayer.CharacterAdded:Connect(refreshCharacter)
 -- EXPLOITS  (client-side attribute unlocks used by TSB)
 -------------------------------------------------------------------------------
 local function applyExploits()
-    local name = LocalPlayer.Name
-    local uid  = tostring(LocalPlayer.UserId)
     pcall(function()
-        if workspace:GetAttribute("VIPServer")        ~= uid   then workspace:SetAttribute("VIPServer",        uid)   end
-        if workspace:GetAttribute("VIPServerOwner")   ~= name  then workspace:SetAttribute("VIPServerOwner",   name)  end
         if workspace:GetAttribute("NoDashCooldown")   == nil   then workspace:SetAttribute("NoDashCooldown",   false) end
         if workspace:GetAttribute("NoFatigue")        == nil   then workspace:SetAttribute("NoFatigue",        false) end
         if LocalPlayer:GetAttribute("ExtraSlots")     == nil   then LocalPlayer:SetAttribute("ExtraSlots",     false) end
