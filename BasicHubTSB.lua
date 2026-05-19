@@ -44,17 +44,12 @@ local lEncode, lDecode, lDigest = a3, aw, Z
 
 local useNonce = true
 
--- Executor detection
-local isXeno = (identifyexecutor and identifyexecutor():lower():find("xeno")) or
-               (typeof(XENO) ~= "nil") or false
-
 local function safeRequest(options)
     local req = (syn and syn.request)
              or request
              or http_request
              or syn_request
              or (http and http.request)
-             or (isXeno and XENO and XENO.request)
              or nil
     if not req then return nil, "HTTP requests not supported" end
     local success, response = pcall(function() return req(options) end)
@@ -67,10 +62,7 @@ local fToString      = tostring
 local fOsTime        = os.time
 local fMathRandom    = math.random
 local fMathFloor     = math.floor
-local fGetHwid       = gethwid or (isXeno and function()
-    local ok, id = pcall(function() return game:GetService("RbxAnalyticsService"):GetClientId() end)
-    return ok and id or tostring(game:GetService("Players").LocalPlayer.UserId)
-end) or function()
+local fGetHwid       = gethwid or function()
     local ok, id = pcall(function() return game:GetService("RbxAnalyticsService"):GetClientId() end)
     return ok and id or tostring(game:GetService("Players").LocalPlayer.UserId)
 end
@@ -94,7 +86,7 @@ local function generateNonce()
     return str
 end
 
--- forceRefresh=true в†’ bypass cache and always fetch a fresh lootlabs link
+-- forceRefresh=true → bypass cache and always fetch a fresh lootlabs link
 -- Retries up to 3 times with 1-second delay between attempts
 local function cacheLink(forceRefresh)
     if forceRefresh or cachedTime + (10 * 60) < fOsTime() then
@@ -186,9 +178,9 @@ local function CreateGUI()
     local UIS     = game:GetService("UserInputService")
     local TS      = game:GetService("TweenService")
 
-    -- в”Ђв”Ђ ScreenGui в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    -- ── ScreenGui ─────────────────────────────────────────────────────────────
     local guiRoot
-    -- 1) gethui() вЂ” Xeno / modern executors
+    -- 1) gethui() -- Xeno / modern executors
     pcall(function()
         if type(gethui) == "function" then
             local sg = Instance.new("ScreenGui")
@@ -232,7 +224,7 @@ local function CreateGUI()
     local C_RED     = Color3.fromRGB(255, 70,  70 )
     local C_GREEN   = Color3.fromRGB(0,   210, 100)
 
-    -- в”Ђв”Ђ Main frame в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    -- ── Main frame ────────────────────────────────────────────────────────────
     local Main = Instance.new("Frame", guiRoot)
     Main.Name             = "MainFrame"
     Main.Size             = UDim2.new(0, 340, 0, 246)
@@ -276,7 +268,7 @@ local function CreateGUI()
         if inp.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
     end)
 
-    -- в”Ђв”Ђ Top bar в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    -- ── Top bar ───────────────────────────────────────────────────────────────
     local TopBar = Instance.new("Frame", Main)
     TopBar.Size             = UDim2.new(1, 0, 0, 42)
     TopBar.BackgroundColor3 = C_TOP_BG
@@ -302,14 +294,14 @@ local function CreateGUI()
     closeBtn.Size              = UDim2.new(0, 26, 0, 26)
     closeBtn.Position          = UDim2.new(1, -32, 0.5, -13)
     closeBtn.BackgroundColor3  = Color3.fromRGB(180, 40, 40)
-    closeBtn.Text              = "вњ•"
+    closeBtn.Text              = "✕"
     closeBtn.TextColor3        = Color3.fromRGB(255, 255, 255)
     closeBtn.Font              = Enum.Font.GothamBold
     closeBtn.TextSize          = 11
     Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
     closeBtn.MouseButton1Click:Connect(function() guiRoot:Destroy() end)
 
-    -- в”Ђв”Ђ Description в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    -- ── Description ───────────────────────────────────────────────────────────
     local descLbl = Instance.new("TextLabel", Main)
     descLbl.Size                   = UDim2.new(1, -20, 0, 22)
     descLbl.Position               = UDim2.new(0, 10, 0, 46)
@@ -320,7 +312,7 @@ local function CreateGUI()
     descLbl.TextSize               = 12
     descLbl.TextXAlignment         = Enum.TextXAlignment.Center
 
-    -- в”Ђв”Ђ Key input в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    -- ── Key input ─────────────────────────────────────────────────────────────
     local inputHolder = Instance.new("Frame", Main)
     inputHolder.Size             = UDim2.new(0.88, 0, 0, 36)
     inputHolder.Position         = UDim2.new(0.06, 0, 0, 76)
@@ -350,7 +342,7 @@ local function CreateGUI()
         TS:Create(inputStroke, TweenInfo.new(0.15), { Color = Color3.fromRGB(46, 46, 62) }):Play()
     end)
 
-    -- в”Ђв”Ђ Buttons в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    -- ── Buttons ───────────────────────────────────────────────────────────────
     local verifyBtn = Instance.new("TextButton", Main)
     verifyBtn.Size             = UDim2.new(0.42, 0, 0, 34)
     verifyBtn.Position         = UDim2.new(0.06, 0, 0, 122)
@@ -371,7 +363,7 @@ local function CreateGUI()
     getKeyBtn.TextSize         = 13
     Instance.new("UICorner", getKeyBtn).CornerRadius = UDim.new(0, 7)
 
-    -- в”Ђв”Ђ Status в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    -- ── Status ────────────────────────────────────────────────────────────────
     local statusLbl = Instance.new("TextLabel", Main)
     statusLbl.Name                   = "StatusLabel"
     statusLbl.Size                   = UDim2.new(1, -20, 0, 24)
@@ -383,7 +375,7 @@ local function CreateGUI()
     statusLbl.TextSize               = 12
     statusLbl.TextXAlignment         = Enum.TextXAlignment.Center
 
-    -- в”Ђв”Ђ Info note в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    -- ── Info note ─────────────────────────────────────────────────────────────
     local infoLbl = Instance.new("TextLabel", Main)
     infoLbl.Size                   = UDim2.new(1, -20, 0, 18)
     infoLbl.Position               = UDim2.new(0, 10, 0, 194)
@@ -395,7 +387,7 @@ local function CreateGUI()
     infoLbl.TextXAlignment         = Enum.TextXAlignment.Center
     infoLbl.TextWrapped            = true
 
-    -- в”Ђв”Ђ Hover effects в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    -- ── Hover effects ─────────────────────────────────────────────────────────
     verifyBtn.MouseEnter:Connect(function()
         TS:Create(verifyBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(0, 160, 255) }):Play()
     end)
@@ -409,7 +401,7 @@ local function CreateGUI()
         TS:Create(getKeyBtn, TweenInfo.new(0.1), { BackgroundColor3 = C_BTN_ALT }):Play()
     end)
 
-    -- в”Ђв”Ђ Logic в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    -- ── Logic ─────────────────────────────────────────────────────────────────
     local function setStatus(text, color)
         statusLbl.Text       = text
         statusLbl.TextColor3 = color or C_SUB
